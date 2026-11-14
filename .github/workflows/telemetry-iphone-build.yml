@@ -1,0 +1,105 @@
+name: Telemetry iPhone for Windows
+# Sole build workflow: manually generate unsigned iPhone IPA for Sideloadly on Windows.
+# No automatic macOS jobs on every push, reducing unnecessary Actions billing.
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: telemetry-iphone-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  iphone:
+    name: iPhone IPA for Windows (Sideloadly)
+    runs-on: macos-26-intel
+    timeout-minutes: 90
+    env:
+      EXPO_PUBLIC_API_BASE_URL: ${{ vars.EXPO_PUBLIC_API_BASE_URL }}
+      EXPO_PUBLIC_FAMILY_API_URL: ${{ vars.EXPO_PUBLIC_FAMILY_API_URL }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Inspect Apple build tools
+        run: |
+          xcodebuild -version
+          xcrun --sdk iphoneos --show-sdk-version
+      - name: Install dependencies (works without package-lock.json)
+        run: npm install --no-audit --no-fund
+      - name: Verify iOS source before packaging
+        run: |
+          npm test
+          npm run typecheck
+          npm run lint
+          npm run format:check
+      - name: Generate native iPhone project
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx expo prebuild --platform ios --clean --non-interactive --no-install > "$RUNNER_TEMP/telemetry-prebuild.log" 2>&1 || {
+            tail -n 140 "$RUNNER_TEMP/telemetry-prebuild.log"
+            exit 1
+          }
+          tail -n 12 "$RUNNER_TEMP/telemetry-prebuild.log"
+      - name: Install CocoaPods
+        shell: bash
+        run: |
+          set -euo pipefail
+          (cd ios && pod install) > "$RUNNER_TEMP/telemetry-pods.log" 2>&1 || {
+            tail -n 160 "$RUNNER_TEMP/telemetry-pods.log"
+            exit 1
+          }
+          tail -n 12 "$RUNNER_TEMP/telemetry-pods.log"
+      - name: Compile unsigned physical iPhone app
+        shell: bash
+        run: |
+          set -euo pipefail
+          xcodebuild -workspace ios/Telemetry.xcworkspace \
+            -scheme Telemetry -configuration Release \
+            -sdk iphoneos -destination 'generic/platform=iOS' \
+            -derivedDataPath "$RUNNER_TEMP/TelemetryDerivedData" \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO 'CODE_SIGN_IDENTITY=' \
+            build > "$RUNNER_TEMP/telemetry-ios-build.log" 2>&1 || {
+              echo 'Xcode build failed; last 180 lines:'
+              tail -n 180 "$RUNNER_TEMP/telemetry-ios-build.log"
+              exit 1
+            }
+          tail -n 12 "$RUNNER_TEMP/telemetry-ios-build.log"
+      - name: Package IPA and verify arm64
+        shell: bash
+        run: |
+          set -euo pipefail
+          APP="$RUNNER_TEMP/TelemetryDerivedData/Build/Products/Release-iphoneos/Telemetry.app"
+          test -f "$APP/Info.plist"
+          test -f "$APP/Telemetry"
+          /usr/bin/lipo -archs "$APP/Telemetry" | grep -qw arm64
+          BUNDLE_ID=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Info.plist")
+          test "$BUNDLE_ID" = 'com.innovsy.telemetry'
+          mkdir -p "$RUNNER_TEMP/TelemetryIpaStaging/Payload" dist
+          ditto "$APP" "$RUNNER_TEMP/TelemetryIpaStaging/Payload/Telemetry.app"
+          (cd "$RUNNER_TEMP/TelemetryIpaStaging" && zip -qry "$GITHUB_WORKSPACE/dist/Telemetry-unsigned.ipa" Payload)
+          test -s dist/Telemetry-unsigned.ipa
+          unzip -tq dist/Telemetry-unsigned.ipa
+          printf '%s\n' 'Telemetry iPhone build' "Build: $GITHUB_RUN_ID" "Commit: $GITHUB_SHA" \
+            "Bundle: $BUNDLE_ID" 'Arm64 physical iPhone app; unsigned.' \
+            'Use Sideloadly on Windows to sign and install with your Apple ID.' > dist/BUILD-INFO.txt
+          shasum -a 256 dist/Telemetry-unsigned.ipa > dist/IPA-SHA256.txt
+      - name: Save compilation logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Telemetry-iPhone-Build-Diagnostics
+          path: |
+            ${{ runner.temp }}/telemetry-prebuild.log
+            ${{ runner.temp }}/telemetry-pods.log
+            ${{ runner.temp }}/telemetry-ios-build.log
+          if-no-files-found: warn
+          retention-days: 7
+      - name: Deliver IPA for Sideloadly on Windows
+        uses: actions/upload-artifact@v4
+        with:
+          name: Telemetry-iPhone-for-Windows
+          path: dist/
+          if-no-files-found: error
+          retention-days: 14
