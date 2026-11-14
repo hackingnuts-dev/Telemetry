@@ -6,7 +6,7 @@ This repository has one GitHub Actions workflow: **Telemetry iPhone for Windows*
 
 ## Build your iPhone IPA
 
-1. Open **[Telemetry iPhone for Windows](https://github.com/lazyKode/Telemetry/actions/workflows/telemetry-iphone-build.yml)**.
+1. Open **[Telemetry iPhone for Windows](https://github.com/hackingnuts-dev/Telemetry/actions/workflows/telemetry-iphone-build.yml)**.
 2. Click **Run workflow**, choose `main`, then run it.
 3. Open the successful run and download the **Telemetry-iPhone-for-Windows** artifact under **Artifacts**.
 4. Extract the GitHub ZIP. It contains `Telemetry-unsigned.ipa`, `BUILD-INFO.txt`, and `IPA-SHA256.txt`.

@@ -1,6 +1,6 @@
 # Telemetry — iPhone for Windows only
 
-The **only active build workflow** is [Telemetry iPhone for Windows](https://github.com/lazyKode/Telemetry/actions/workflows/telemetry-iphone-build.yml).
+The **only active build workflow** is [Telemetry iPhone for Windows](https://github.com/hackingnuts-dev/Telemetry/actions/workflows/telemetry-iphone-build.yml).
 
 - It is **manual**: **Actions → Telemetry iPhone for Windows → Run workflow → main**.
 - Uses a GitHub-hosted Mac with Xcode, installs Expo/CocoaPods, builds an unsigned arm64 iPhone app, and packages `Telemetry-unsigned.ipa`.
