@@ -1,0 +1,180 @@
+:root {
+  font-family:
+    system-ui,
+    -apple-system,
+    sans-serif;
+  color: #162747;
+  background: #f1f5fa;
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+}
+header {
+  background: white;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 18px 4%;
+  box-shadow: 0 1px 6px #13274612;
+}
+header > div {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+header small {
+  color: #66748d;
+}
+.mark {
+  font-size: 30px;
+  color: #2870db;
+}
+main {
+  max-width: 1380px;
+  margin: auto;
+  padding: 24px;
+}
+h1 {
+  font-size: 29px;
+}
+h2 {
+  font-size: 19px;
+  margin: 0 0 12px;
+}
+.panel {
+  background: white;
+  border: 1px solid #dfe7f2;
+  padding: 22px;
+  border-radius: 18px;
+  margin-bottom: 17px;
+  box-shadow: 0 3px 20px #172f5008;
+}
+#login {
+  max-width: 480px;
+  margin: 36px auto;
+}
+.columns {
+  display: grid;
+  grid-template-columns: 345px 1fr;
+  gap: 20px;
+}
+.sidebar {
+  min-width: 0;
+}
+.mainarea {
+  min-width: 0;
+}
+label {
+  display: block;
+  font-weight: 600;
+  font-size: 13px;
+  color: #394a65;
+  margin: 10px 0;
+}
+input {
+  display: block;
+  width: 100%;
+  height: 44px;
+  padding: 10px 12px;
+  margin-top: 6px;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  font-size: 15px;
+}
+button {
+  border: 0;
+  background: #2464cf;
+  color: white;
+  border-radius: 10px;
+  padding: 11px 15px;
+  font-weight: 700;
+  cursor: pointer;
+  margin: 5px 0;
+}
+button.secondary {
+  background: #eaf1ff;
+  color: #2257ae;
+}
+button.danger {
+  background: #fbe8e8;
+  color: #9c2727;
+}
+button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.hint {
+  font-size: 13px;
+  color: #65758f;
+  line-height: 1.5;
+}
+.message {
+  color: #b03b3b;
+  min-height: 18px;
+}
+.toggle {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+.toggle input {
+  width: 22px;
+  height: 22px;
+  flex: none;
+}
+.spread {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.contact,
+.invite {
+  padding: 11px 0;
+  border-bottom: 1px solid #edf1f7;
+}
+.contact button,
+.invite button {
+  margin: 6px 5px 0 0;
+}
+.contact strong {
+  display: block;
+}
+.muted {
+  font-size: 12px;
+  color: #6a778a;
+}
+.online {
+  color: #15803d;
+}
+.offline {
+  color: #86631c;
+}
+#map {
+  height: 430px;
+  border-radius: 14px;
+  z-index: 0;
+}
+.alert {
+  border-bottom: 1px solid #edf1f7;
+  padding: 8px 0;
+}
+form button {
+  margin-top: 10px;
+}
+@media (max-width: 800px) {
+  .columns {
+    grid-template-columns: 1fr;
+  }
+  header small {
+    display: none;
+  }
+  main {
+    padding: 12px;
+  }
+  #map {
+    height: 330px;
+  }
+}
