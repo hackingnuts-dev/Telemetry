@@ -1,0 +1,35 @@
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: telemetry
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+      POSTGRES_DB: telemetry
+    volumes:
+      - family_postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U telemetry -d telemetry']
+      interval: 5s
+      timeout: 5s
+      retries: 12
+  api:
+    build: .
+    environment:
+      NODE_ENV: production
+      PORT: 8787
+      DATABASE_URL: postgres://telemetry:${POSTGRES_PASSWORD}@postgres:5432/telemetry
+      PUBLIC_APP_URL: ${PUBLIC_APP_URL}
+      MOBILE_INSTALL_URL: ${MOBILE_INSTALL_URL}
+      TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID}
+      TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN}
+      TWILIO_VERIFY_SERVICE_SID: ${TWILIO_VERIFY_SERVICE_SID}
+      TWILIO_FROM_NUMBER: ${TWILIO_FROM_NUMBER}
+      TRUST_PROXY: 'true'
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - '127.0.0.1:8787:8787'
+    restart: unless-stopped
+volumes:
+  family_postgres:

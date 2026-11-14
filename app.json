@@ -1,0 +1,40 @@
+{
+  "expo": {
+    "name": "Telemetry",
+    "slug": "telemetry",
+    "scheme": "telemetry",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.innovsy.telemetry",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "Telemetry uses your location when you choose to share it with approved contacts.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "When you opt in, Telemetry can share your location with accepted contacts while running in the background. You can pause sharing at any time.",
+        "UIBackgroundModes": ["location"]
+      }
+    },
+    "plugins": [
+      [
+        "expo-location",
+        {
+          "isIosBackgroundLocationEnabled": true,
+          "locationAlwaysAndWhenInUsePermission": "With your permission, Telemetry records approved zone transitions and stationary events while the app is in the background.",
+          "locationWhenInUsePermission": "Telemetry uses location to detect approved workplace zone events."
+        }
+      ],
+      [
+        "expo-sqlite",
+        {
+          "useSQLCipher": true
+        }
+      ],
+      ["expo-secure-store", {}]
+    ],
+    "extra": {
+      "pilot": true
+    }
+  }
+}
