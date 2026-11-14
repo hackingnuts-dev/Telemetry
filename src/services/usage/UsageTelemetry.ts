@@ -5,7 +5,6 @@ export function getUsageCapability(): {
 } {
   return {
     available: false,
-    explanation:
-      "iOS app usage needs approved Screen Time entitlements and a native integration.",
+    explanation: 'iOS app usage needs approved Screen Time entitlements and a native integration.',
   };
 }
