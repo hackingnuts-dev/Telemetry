@@ -56,7 +56,9 @@ export default function Family({ onBack }: Props) {
       if (await hasFamilySession()) await refresh().catch(() => setUser(null));
     })();
     const poll = setInterval(() => {
-      void hasFamilySession().then((active) => active && refresh().catch(() => {}));
+      void hasFamilySession().then((active) => {
+        if (active) void refresh().catch(() => {});
+      });
     }, 30000);
     return () => clearInterval(poll);
   }, [refresh]);
