@@ -18,11 +18,11 @@ The workflow is **manual only** so pushes to `main` do not automatically consume
 
 - Opt-in foreground and background location, with iOS-controlled timing.
 - SQLCipher-encrypted on-device observations; user-visible dashboard and battery status.
-- Family Safety screen with **email OTP sign-in** (requires a verified sender and Resend Free email service).
+- Family Safety sign-in via **Cloudflare Access One-time PIN** using the iPhone system browser (no domain purchase, SMS, or external email provider).
 - Family invitations and location sharing remain **disabled** until the Cloudflare API supports verified consent and access control.
 - App usage metadata remains unavailable until the necessary Apple entitlement and native implementation exist.
 
-**Email sign-in is staged, not deployed.** The new Cloudflare Worker implementation and D1 migration are in [cloudflare/](cloudflare/README.md). Configure a verified sender, Resend Free API key, the `AUTH_PEPPER` secret, and the new auth tables before deploying the Worker. The previous Node/PostgreSQL SMS server remains under `server/` as legacy source only. Family invitations, shared contacts, and live maps are not operational yet.
+**Cloudflare Access iPhone sign-in is implemented in source, not deployed or physically tested.** See [cloudflare/](cloudflare/README.md). A path-based Access application must protect `/auth/access/complete` only. An extra D1 migration (`0003_access_exchange.sql`) is required. The previous Node/PostgreSQL SMS server remains under `server/` as legacy source only. Family invitations, shared contacts, and live maps remain disabled pending per-user consent authorization.
 
 The repository is publicly visible; never commit private email addresses, session tokens, or API secrets. GitHub Actions may still be blocked by your account-level billing restriction, which cannot be resolved by changing the workflow. See [iPhone build guidance](docs/BUILD.md).
 
@@ -45,4 +45,8 @@ Native iPhone builds require macOS/Xcode. The GitHub workflow supplies this envi
 
 ## Zero-spend requirement
 
-Do not purchase Cloudflare Workers Paid or Resend Pro. Telemetry's Cloudflare email-auth backend requires **Resend Free**, a verified domain you already own, and Workers/D1 free-tier usage within their limits. Email sending stops when free quotas are exhausted; it must not automatically upgrade. GitHub-hosted iPhone builds can incur charges if your included Actions allowance is exhausted, so run them manually and review GitHub usage. **No provider can be guaranteed free beyond its published quotas.**
+Do not purchase Workers Paid, email delivery services, a domain, or any GitHub subscription. Cloudflare Access Free handles One-time PIN emails. Workers and D1 have separate free quotas and may stop working when allowance is exhausted. GitHub-hosted iPhone builds can incur charges beyond included minutes; keep manual builds and review GitHub billing before running one. No unlimited-cost guarantee is possible.
+
+## Current authentication architecture
+
+The protected browser endpoint is `/auth/access/complete`, on `telemetry-family-api.alankarsharma44.workers.dev`. The Worker uses Cloudflare's authenticated identity through `ctx.access`, then redirects a 90-second code to the app; the app uses proof-of-possession and a one-time exchange for a short-lived session. **Do not protect the entire Worker** because native app exchange and future real-time data connections need separate authentication rules. No location data is shared until explicit per-contact consent APIs are implemented.

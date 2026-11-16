@@ -9,6 +9,7 @@ Cloudflare Access One-time PIN sends email codes, no email sending provider or d
 Cancel the unsaved **Workers**-destination application form. Keep the existing reusable policy `Telemetry Family Allow` with only your approved email addresses.
 
 Create a new **Self-hosted and private → Public DNS / public hostname** Access application, if your account offers it for `workers.dev` routes:
+
 - Hostname: `telemetry-family-api.alankarsharma44.workers.dev`
 - Path: `/auth/access/complete` **only**
 - Policy: `Telemetry Family Allow`
@@ -20,6 +21,7 @@ Verify Access protects this exact path and leaves `/health` and `/v1/auth/access
 ## 2. Database migration
 
 The existing four `email_*` tables are reused. In Cloudflare D1 Console, execute the SQL from `migrations/0003_access_exchange.sql`. Verify:
+
 ```sql
 SELECT name FROM sqlite_master WHERE name='access_login_codes';
 ```
