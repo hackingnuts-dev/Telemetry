@@ -1,6 +1,5 @@
-// Cloudflare Access must protect ONLY /auth/access/complete as a hostname/path
-// application. Never protect the entire Worker: the native app needs public
-// token-exchange endpoints, guarded by independent single-use code checks.
+// Public Telemetry Family API: authenticated by independently issued D1-backed sessions.
+// The separate Access-protected auth Worker is the only code allowed to mint login codes.
 const encoder = new TextEncoder();
 const CODE_TTL = 90000;
 const SESSION_TTL = 86400000;
@@ -53,31 +52,6 @@ async function who(req, env) {
     .first();
   if (!user) throw err(401, 'Session expired');
   return { user, tokenHash };
-}
-async function accessComplete(req, env, ctx) {
-  // This context is populated by the Cloudflare Access edge after policy checks.
-  // Never trust an email or JWT pasted in request headers.
-  const identity = await ctx?.access?.getIdentity?.();
-  const email = emailOf(identity);
-  if (!email) throw err(403, 'Cloudflare Access authentication required');
-  const url = new URL(req.url);
-  const state = url.searchParams.get('state'),
-    challenge = url.searchParams.get('challenge');
-  if (!isHex(state, 32) || !isHex(challenge, 64)) throw err(400, 'Invalid login request');
-  const code = hexBytes(),
-    now = Date.now();
-  await env.DB.prepare(
-    'INSERT INTO access_login_codes(code_hash,state_hash,verifier_hash,authenticated_email,issued_at,expires_at) VALUES(?,?,?,?,?,?)',
-  )
-    .bind(await hash(code), await hash(state), challenge, email, now, now + CODE_TTL)
-    .run();
-  const callback = new URL('telemetry://family-auth');
-  callback.searchParams.set('code', code);
-  callback.searchParams.set('state', state);
-  return new Response(null, {
-    status: 302,
-    headers: { Location: callback.toString(), 'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer' },
-  });
 }
 async function exchange(req, env) {
   if (!req.headers.get('content-type')?.startsWith('application/json')) throw err(415, 'Expected JSON');
@@ -133,7 +107,6 @@ async function handle(req, env, ctx) {
       return json({ databaseConnected: false }, 503);
     }
   }
-  if (path === '/auth/access/complete' && req.method === 'GET') return accessComplete(req, env, ctx);
   if (path === '/v1/auth/access/exchange' && req.method === 'POST') return exchange(req, env);
   if (path === '/v1/me' && req.method === 'GET') {
     const { user } = await who(req, env);

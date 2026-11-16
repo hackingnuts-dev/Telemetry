@@ -15,7 +15,8 @@ export type FamilyUser = {
 };
 
 export function familyConfigured(): boolean {
-  return BASE.startsWith('https://') && !BASE.includes('example.com');
+  return BASE.startsWith('https://') && !BASE.includes('example.com') &&
+    AUTH_BASE.startsWith('https://') && !AUTH_BASE.includes('example.com');
 }
 
 async function api<T>(path: string, method = 'GET', body?: object, token?: string): Promise<T> {
@@ -48,7 +49,7 @@ export async function signInWithCloudflareAccess(): Promise<FamilyUser> {
   const verifier = randomHex(32);
   const challenge = await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, verifier);
   const redirectUri = 'telemetry://family-auth';
-  const loginUrl = BASE + '/auth/access/complete?state=' + state + '&challenge=' + challenge;
+  const loginUrl = AUTH_BASE + '/auth/access/complete?state=' + state + '&challenge=' + challenge;
   const result = await WebBrowser.openAuthSessionAsync(loginUrl, redirectUri);
   if (result.type !== 'success') throw new Error('Sign-in was cancelled.');
   const callback = new URL(result.url);
