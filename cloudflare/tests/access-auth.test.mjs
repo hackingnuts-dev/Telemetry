@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
 import { readFileSync } from 'node:fs';
 import worker from '../src/index.mjs';
+import authWorker from '../src/auth.mjs';
 
 function fixture() {
   const sql = new DatabaseSync(':memory:');
@@ -26,7 +27,7 @@ function fixture() {
   }
   return { env: { DB: { prepare: prepared } }, sql };
 }
-async function call(env, path, { method = 'GET', body, token, access, headers } = {}) {
+async function call(env, path, { method = 'GET', body, token, access, headers, asAuth = false } = {}) {
   const req = new Request('https://telemetry-family-api.example.workers.dev' + path, {
     method,
     headers: {
@@ -36,7 +37,7 @@ async function call(env, path, { method = 'GET', body, token, access, headers } 
     },
     body: body ? JSON.stringify(body) : undefined,
   });
-  const res = await worker.fetch(
+  const res = await (asAuth ? authWorker : worker).fetch(
     req,
     env,
     access ? { access: { getIdentity: async () => ({ email: access }) } } : {},
@@ -60,9 +61,10 @@ test('Access OTP identity cannot be forged from headers; sharing is disabled', a
   const path = '/auth/access/complete?state=' + state + '&challenge=' + challenge;
   const spoof = await call(env, path, {
     headers: { 'Cf-Access-Jwt-Assertion': 'fake', 'X-Email': 'admin@example.com' },
+    asAuth: true,
   });
   assert.equal(spoof.status, 403);
-  const invalid = await call(env, path, { access: 'not-an-email' });
+  const invalid = await call(env, path, { access: 'not-an-email', asAuth: true });
   assert.equal(invalid.status, 403);
   assert.equal(
     (await json(await call(env, '/v1/location', { method: 'POST', body: { lat: 40, lng: -74 } }))).status,
@@ -76,6 +78,7 @@ test('browser one-time code exchange binds to state, verifier and verified ident
     challenge = await sha(verifier);
   const finished = await call(env, '/auth/access/complete?state=' + state + '&challenge=' + challenge, {
     access: 'Person@Example.com',
+    asAuth: true,
   });
   assert.equal(finished.status, 302);
   assert.equal(finished.headers.get('Cache-Control'), 'no-store');
