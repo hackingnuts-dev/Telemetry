@@ -18,17 +18,17 @@ The workflow is **manual only** so pushes to `main` do not automatically consume
 
 - Opt-in foreground and background location, with iOS-controlled timing.
 - SQLCipher-encrypted on-device observations; user-visible dashboard and battery status.
-- Family Safety screen with phone OTP sign-in, invitations, contact list, and pause/revoke sharing controls.
-- Family contacts can only be viewed after they verify their number and accept sharing. Knowing a phone number does not grant location access.
+- Family Safety screen with **email OTP sign-in** (requires a configured Cloudflare Email Sending service).
+- Family invitations and location sharing remain **disabled** until the Cloudflare API supports verified consent and access control.
 - App usage metadata remains unavailable until the necessary Apple entitlement and native implementation exist.
 
-**Family networking is not live by default.** Deploy the opt-in service under [server/](server/README.md) with PostgreSQL, a valid HTTPS origin, and SMS provider configuration. Set the GitHub Actions repository variable `EXPO_PUBLIC_FAMILY_API_URL` to its HTTPS URL **before building**. Local device telemetry works without the family server, but invitations, shared contacts, and live maps require it.
+**Email sign-in is staged, not deployed.** The new Cloudflare Worker implementation and D1 migration are in [cloudflare/](cloudflare/README.md). Configure a verified sender, an email binding, the `AUTH_PEPPER` secret, and the new auth tables before deploying the Worker. The previous Node/PostgreSQL SMS server remains under `server/` as legacy source only. Family invitations, shared contacts, and live maps are not operational yet.
 
-The repository remains private. GitHub Actions may still be blocked by your account-level billing restriction, which cannot be resolved by changing the workflow. See [iPhone build guidance](docs/BUILD.md).
+The repository is publicly visible; never commit private email addresses, session tokens, or API secrets. GitHub Actions may still be blocked by your account-level billing restriction, which cannot be resolved by changing the workflow. See [iPhone build guidance](docs/BUILD.md).
 
 ## Safety and privacy
 
-Location collection starts off. Users control tracking and can pause sharing. The server enforces accepted relationships, and phone numbers are verified contact handles rather than authentication secrets. No screenshot recording or hidden monitoring is included.
+Location collection starts off. Users control tracking and can pause sharing. Email sign-in grants no location access. A future family-sharing API must check accepted relationships on every request. No screenshot recording or hidden monitoring is included.
 
 ## Development
 
