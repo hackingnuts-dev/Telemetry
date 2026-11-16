@@ -6,9 +6,10 @@ import { getSettings } from '../../core/settings';
 const FAMILY_URL = (process.env.EXPO_PUBLIC_FAMILY_API_URL || '').replace(/\/$/, '');
 const SESSION_KEY = 'telemetry.family.session.v1';
 const SHARING_KEY = 'telemetry.family.sharing.v1';
+const CHALLENGE_KEY = 'telemetry.family.email_challenge.v1';
 let lastFamilyUpload = 0;
 
-export type FamilyUser = { id: string; phone: string; name: string; sharingEnabled: boolean };
+export type FamilyUser = { id: string; email: string; name: string; sharingEnabled: boolean; familyReady: boolean };
 export type FamilyContact = {
   id: string;
   name: string;
@@ -45,23 +46,30 @@ async function request<T>(path: string, method = 'GET', body?: object, loggedIn 
     clearTimeout(timer);
   }
 }
-export async function startFamilyLogin(phone: string): Promise<void> {
-  await request('/v1/auth/start', 'POST', { phone }, false);
+export async function startFamilyLogin(email: string): Promise<void> {
+  const result = await request<{ challengeId: string }>(
+    '/v1/auth/email/start', 'POST', { email: email.trim().toLowerCase() }, false,
+  );
+  await SecureStore.setItemAsync(CHALLENGE_KEY, result.challengeId);
 }
-export async function verifyFamilyLogin(phone: string, code: string, name: string): Promise<FamilyUser> {
+export async function verifyFamilyLogin(email: string, code: string, name: string): Promise<FamilyUser> {
+  const challengeId = await SecureStore.getItemAsync(CHALLENGE_KEY);
+  if (!challengeId) throw new Error('Request a new email code first');
   const result = await request<{ token: string; user: FamilyUser }>(
-    '/v1/auth/verify',
+    '/v1/auth/email/verify',
     'POST',
-    { phone, code, name },
+    { email: email.trim().toLowerCase(), code: code.trim(), challengeId, name },
     false,
   );
   await SecureStore.setItemAsync(SESSION_KEY, result.token);
-  await SecureStore.setItemAsync(SHARING_KEY, result.user.sharingEnabled ? 'true' : 'false');
+  await SecureStore.deleteItemAsync(CHALLENGE_KEY);
+  // Email authentication does not authorize family location sharing.
+  await SecureStore.setItemAsync(SHARING_KEY, 'false');
   return result.user;
 }
 export async function familyMe(): Promise<FamilyUser> {
   const response = await request<{ user: FamilyUser }>('/v1/me');
-  await SecureStore.setItemAsync(SHARING_KEY, response.user.sharingEnabled ? 'true' : 'false');
+  await SecureStore.setItemAsync(SHARING_KEY, response.user.familyReady && response.user.sharingEnabled ? 'true' : 'false');
   return response.user;
 }
 export const familyContacts = async () =>
@@ -103,6 +111,7 @@ export async function familySignOut(): Promise<void> {
   } finally {
     await SecureStore.deleteItemAsync(SESSION_KEY);
     await SecureStore.setItemAsync(SHARING_KEY, 'false');
+    await SecureStore.deleteItemAsync(CHALLENGE_KEY);
   }
 }
 export async function hasFamilySession(): Promise<boolean> {
