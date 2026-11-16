@@ -22,7 +22,7 @@ The workflow is **manual only** so pushes to `main` do not automatically consume
 - Family invitations and location sharing remain **disabled** until the Cloudflare API supports verified consent and access control.
 - App usage metadata remains unavailable until the necessary Apple entitlement and native implementation exist.
 
-**Cloudflare Access iPhone sign-in is implemented in source, not deployed or physically tested.** See [cloudflare/](cloudflare/README.md). A path-based Access application must protect `/auth/access/complete` only. An extra D1 migration (`0003_access_exchange.sql`) is required. The previous Node/PostgreSQL SMS server remains under `server/` as legacy source only. Family invitations, shared contacts, and live maps remain disabled pending per-user consent authorization.
+**Cloudflare Access iPhone sign-in is implemented in source, not deployed or physically tested.** See [cloudflare/](cloudflare/README.md). Cloudflare Access now protects the dedicated `telemetry-family-auth` Worker; `telemetry-family-api` remains separate. The migration `0003_access_exchange.sql` and a `DB` binding on the auth Worker are required before deployment. The previous Node/PostgreSQL SMS server remains under `server/` as legacy source only. Family invitations, shared contacts, and live maps remain disabled pending per-user consent authorization.
 
 The repository is publicly visible; never commit private email addresses, session tokens, or API secrets. GitHub Actions may still be blocked by your account-level billing restriction, which cannot be resolved by changing the workflow. See [iPhone build guidance](docs/BUILD.md).
 
@@ -49,4 +49,6 @@ Do not purchase Workers Paid, email delivery services, a domain, or any GitHub s
 
 ## Current authentication architecture
 
-The protected browser endpoint is `/auth/access/complete`, on `telemetry-family-api.alankarsharma44.workers.dev`. The Worker uses Cloudflare's authenticated identity through `ctx.access`, then redirects a 90-second code to the app; the app uses proof-of-possession and a one-time exchange for a short-lived session. **Do not protect the entire Worker** because native app exchange and future real-time data connections need separate authentication rules. No location data is shared until explicit per-contact consent APIs are implemented.
+The protected browser endpoint is `/auth/access/complete`, on `telemetry-family-auth.alankarsharma44.workers.dev`. The Worker uses Cloudflare's authenticated identity through `ctx.access`, then redirects a 90-second code to the app; the app uses proof-of-possession and a one-time exchange for a short-lived session. **Protect the dedicated auth Worker only**. The separate Family API Worker must use its own authenticated session checks. No location data is shared until explicit per-contact consent APIs are implemented.
+
+For iPhone auth, configure BOTH `EXPO_PUBLIC_FAMILY_API_URL` and `EXPO_PUBLIC_FAMILY_AUTH_URL` in GitHub Actions repository variables before building. See [Cloudflare setup](cloudflare/README.md).

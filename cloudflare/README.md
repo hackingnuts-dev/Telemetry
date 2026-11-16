@@ -1,47 +1,43 @@
-# Telemetry Family — Cloudflare Access Free
+# Telemetry Family — Free Cloudflare Access dual-Worker sign-in
 
-Cloudflare Access One-time PIN sends email codes, no email sending provider or domain purchase. The new Worker source is `src/index.mjs`.
+**Current state:** Cloudflare Access has been enabled for `telemetry-family-auth` using the existing `Telemetry Family Allow` policy. The Worker is still the Cloudflare starter application until you paste and deploy the new auth code. The main `telemetry-family-api` remains a separate Worker with D1 binding `DB`, and must receive its updated session code.
 
-**Do not create the currently drafted Worker-wide Access application.** Worker-wide protection blocks the iPhone's public token-exchange endpoint and WebSocket upgrades. Cloudflare documents hostname/path-specific Access separately.
+No domain, SMS service, Cloudflare Workers Paid, or Resend subscription is required for this design.
 
-## 1. Create a path-scoped Access application
+## Architecture
 
-Cancel the unsaved **Workers**-destination application form. Keep the existing reusable policy `Telemetry Family Allow` with only your approved email addresses.
+- `telemetry-family-auth.alankarsharma44.workers.dev`: **all traffic protected by Access**. Cloudflare authenticates One-time PIN email and provides `ctx.access.getIdentity()`. Source: [src/auth.mjs](src/auth.mjs).
+- `telemetry-family-api.alankarsharma44.workers.dev`: public reachable API, with its own authenticated D1-backed sessions. Source: [src/index.mjs](src/index.mjs).
+- Both Workers bind the **same existing** `telemetry-family-db` as `DB`. No new database or service token is required. The auth Worker writes only one-time hashed exchange data; the API Worker consumes it exactly once.
+- The iPhone opens the Access-protected auth Worker in the iOS system authentication browser; the code redirects to `telemetry://family-auth`; app exchanges it at the separate Family API Worker.
 
-Create a new **Self-hosted and private → Public DNS / public hostname** Access application, if your account offers it for `workers.dev` routes:
+## Setup order
 
-- Hostname: `telemetry-family-api.alankarsharma44.workers.dev`
-- Path: `/auth/access/complete` **only**
-- Policy: `Telemetry Family Allow`
-- Identity provider: `One-time PIN`
-- Name: `Telemetry Family Sign-in`
+1. Confirm Access protection: visit `https://telemetry-family-auth.alankarsharma44.workers.dev` in a private browser; email One-time PIN should be requested. The existing policy currently allows only the configured email; later add family emails explicitly.
+2. In Cloudflare **D1 → telemetry-family-db → Console**, run [migrations/0003_access_exchange.sql](migrations/0003_access_exchange.sql), then verify `SELECT name FROM sqlite_master WHERE name='access_login_codes';`. The other email and family tables are already present.
+3. Open **telemetry-family-auth → Settings → Bindings → Add binding → D1**. Set the variable name **`DB`** and select **`telemetry-family-db`**. This is the SAME database already bound to the Family API. Do not create a second database.
+4. In **telemetry-family-auth → Edit code**, replace Hello World with the complete contents of [src/auth.mjs](src/auth.mjs) and Deploy. The Access policy remains attached.
+5. In **telemetry-family-api → Edit code**, replace the temporary health-check Worker with [src/index.mjs](src/index.mjs) and Deploy. Its existing `DB` binding must remain.
+6. Test `https://telemetry-family-api.alankarsharma44.workers.dev/health`; expect `databaseConnected: true`, `accessSchemaReady: true`, and `familySharingReady: false`.
+7. Under **GitHub → hackingnuts-dev/Telemetry → Settings → Secrets and variables → Actions → Variables** configure:
+   - `EXPO_PUBLIC_FAMILY_API_URL`: `https://telemetry-family-api.alankarsharma44.workers.dev`
+   - `EXPO_PUBLIC_FAMILY_AUTH_URL`: `https://telemetry-family-auth.alankarsharma44.workers.dev`
+8. Rebuild manually via the iPhone for Windows workflow and install with Sideloadly. Do not run a build until you are ready to spend your remaining included Actions minutes.
 
-Verify Access protects this exact path and leaves `/health` and `/v1/auth/access/exchange` outside Access. Cloudflare's official documentation supports specific path-protected `workers.dev` hostnames; your dashboard may render the fields differently. Never use an Everyone / Bypass rule.
+## Security requirements
 
-## 2. Database migration
+- Do **not** configure Access on `telemetry-family-api`; doing so would return browser sign-in pages for ordinary app requests.
+- A Cloudflare Access-protected Worker receives verified email via `ctx.access.getIdentity()`; this context does **not** automatically propagate to another Worker. The shared D1 exchange is how the two Workers communicate without trusting unverified HTTP headers.
+- The 90-second exchange code is cryptographically tied to the iPhone's state and a SHA-256 verifier challenge, consumed once, and exchanged for a revocable 24-hour app session.
+- No credentials, Resend API keys, or `AUTH_PEPPER` are needed for this Access configuration.
+- **Family invitations, location uploads, maps, history, and consent-based sharing are not deployed yet.** Those endpoints fail closed. The two-Worker authentication pilot cannot be treated as functioning family tracking.
 
-The existing four `email_*` tables are reused. In Cloudflare D1 Console, execute the SQL from `migrations/0003_access_exchange.sql`. Verify:
+## Local integration tests
 
-```sql
-SELECT name FROM sqlite_master WHERE name='access_login_codes';
+```bash
+node --test cloudflare/tests/access-auth.test.mjs
 ```
 
-## 3. Worker deployment
+Checks include rejecting fake identity headers, refusing location uploads, single-use code exchange, verified-email mapping, session authorization and logout.
 
-After setting up the path-based Access application, copy the **Raw** contents of `src/index.mjs` into the existing `telemetry-family-api` Worker's editor and deploy it (or deploy with Wrangler using `wrangler.jsonc`). The existing D1 binding `DB` must remain attached.
-
-No Resend key, `AUTH_PEPPER`, Cloudflare Email Sending, or paid service is needed for Access email OTP.
-
-## 4. Sign-in security
-
-The iPhone uses the system authentication browser (`ASWebAuthenticationSession`). Access validates email sign-in on the protected path. The Worker reads identity only through `ctx.access`, then creates a **90-second one-time exchange code** tied to a cryptographic proof verifier and client state. The code is returned to `telemetry://family-auth`; the iPhone exchanges it for a short-lived, hashed, revocable D1-backed app session.
-
-Only the browser-login path is protected by Access. All public API endpoints independently require a valid app session token; all family invitation, location, sharing, and history endpoints continue to return HTTP 503 until their per-user consent ACLs are implemented.
-
-## 5. iPhone build
-
-Set GitHub Actions variable `EXPO_PUBLIC_FAMILY_API_URL` to `https://telemetry-family-api.alankarsharma44.workers.dev`, run the manual iPhone workflow, and install the resulting signed-by-Sideloadly app.
-
-**Acceptance testing:** verify (1) browser email OTP login with an allowed address, (2) disallowed address denied by Access, (3) app token exchange succeeds once only, (4) `/v1/me` requires token, (5) logout revokes token, and (6) `/v1/location` remains unavailable.
-
-Cloudflare docs: https://developers.cloudflare.com/workers/configuration/cloudflare-access/
+Cloudflare reference: https://developers.cloudflare.com/workers/configuration/cloudflare-access/
