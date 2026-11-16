@@ -55,7 +55,7 @@ function configured(env) {
     env.AUTH_PEPPER.length >= 32 &&
     typeof env.EMAIL_FROM === 'string' &&
     normalizeEmail(env.EMAIL_FROM) &&
-    (typeof env.EMAIL?.send === 'function' || typeof env.RESEND_API_KEY === 'string')
+    typeof env.RESEND_API_KEY === 'string' && env.RESEND_API_KEY.startsWith('re_')
   );
 }
 async function parseBody(req) {
@@ -86,23 +86,17 @@ async function deliver(env, email, code) {
     'Your Telemetry Family sign-in code is ' +
     code +
     '. It expires in 10 minutes. If you did not request this, you can ignore this message.';
-  if (env.EMAIL?.send) {
-    await env.EMAIL.send({ to: email, from: env.EMAIL_FROM, subject: 'Telemetry Family sign-in code', text });
-  } else if (env.RESEND_API_KEY) {
-    const r = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: { Authorization: 'Bearer ' + env.RESEND_API_KEY, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        from: env.EMAIL_FROM,
-        to: [email],
-        subject: 'Telemetry Family sign-in code',
-        text,
-      }),
-    });
-    if (!r.ok) throw Error('Delivery failed');
-  } else {
-    throw Error('Delivery unavailable');
-  }
+  if (!env.RESEND_API_KEY) throw Error('Email provider not configured');
+  const r = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      Authorization: 'Bearer ' + env.RESEND_API_KEY,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ from: env.EMAIL_FROM, to: [email], subject: 'Telemetry Family sign-in code', text }),
+  });
+  if (!r.ok) throw Error('Email delivery unavailable');
+
 }
 async function authenticate(req, env) {
   const bearer = /^Bearer ([A-Za-z0-9_-]{40,100})$/.exec(req.headers.get('Authorization') || '')?.[1];
@@ -224,7 +218,7 @@ async function fetchHandler(request, env) {
         service: 'Telemetry Family API',
         databaseConnected: true,
         emailSchemaReady: needed.every((n) => rows.results.some((r) => r.name === n)),
-        emailSendingConfigured: !!(env.EMAIL?.send || env.RESEND_API_KEY),
+        emailSendingConfigured: !!(env.RESEND_API_KEY && env.EMAIL_FROM),
         familySharingReady: false,
       });
     } catch {

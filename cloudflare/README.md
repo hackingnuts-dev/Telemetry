@@ -25,27 +25,31 @@ WHERE type='table' AND name LIKE 'email_%' ORDER BY name;
 
 Expect all four tables listed above. Do not run the old `0001_initial.sql` again in the dashboard; the original schema already exists.
 
-## 2. Set up an email sender
+## 2. Free-only email verification setup
 
-Preferred: **Cloudflare Dashboard → Compute → Email Service → Email Sending**. Onboard a domain you control in Cloudflare DNS; follow sender-domain verification instructions. Configure the Worker with a `send_email` binding named `EMAIL`. The repository's `wrangler.jsonc` declares this binding for CLI deployments; you must add/verify it on the live Worker too.
+**Do not purchase Workers Paid.** Cloudflare Email Sending for arbitrary recipients requires Workers Paid. Telemetry uses the optional **Resend Free** transactional email API instead, which offers 3,000 emails/month with a 100/day limit. Do not subscribe to Pro or turn on pay-as-you-go. When the free quota is exhausted, sending should stop rather than automatically incurring overages. See https://resend.com/pricing.
 
-Set Worker **Settings → Variables and Secrets**:
+For real family addresses, Resend requires verifying a sender domain that you **already own**. An existing domain configured with Cloudflare DNS can be used without upgrading Cloudflare. If you do not own a domain, this setup is **not yet a zero-cost way to send email to arbitrary family addresses**; do not buy one without deciding to spend money. Resend's test sender is limited to test recipients and cannot be used for general family onboarding.
 
-- `EMAIL_FROM` (**plain text variable**): a verified sender address such as `login@yourdomain.com` (substitute your real domain)
-- `AUTH_PEPPER` (**encrypted secret**): a newly generated random 32-byte-or-longer high-entropy value (do not commit, send, or screenshot it)
-- `DB` (**D1 binding**): already connected to `telemetry-family-db`
+1. Sign up for Resend Free: https://resend.com
+2. Add and verify a domain you already own (follow Resend SPF/DKIM instructions in Cloudflare DNS).
+3. Generate a Resend API key restricted to email sending; do not commit or share it.
+4. In **Cloudflare Worker → Settings → Variables and Secrets**, set:
+   - `RESEND_API_KEY`: **encrypted secret**, your Resend API key
+   - `AUTH_PEPPER`: **encrypted secret**, a locally generated high-entropy value (at least 32 characters)
+   - `EMAIL_FROM`: **text variable**, sender address at your verified domain (for example `login@YOUR-OWN-DOMAIN`)
+   - `DB`: existing D1 binding `telemetry-family-db`.
+5. There is **no Cloudflare Email Sending binding**. Do not add a binding named `EMAIL`, and do not click **Purchase Workers Paid**.
 
-As an optional alternative to Cloudflare Email Sending, the Worker can use a **secret** `RESEND_API_KEY` with a verified sender domain. Never expose this secret in iPhone `EXPO_PUBLIC_*` variables.
-
-To generate an auth secret locally in Windows PowerShell:
+Generate a random `AUTH_PEPPER` locally in PowerShell (never paste the result in chat):
 
 ```powershell
 $bytes = New-Object byte[] 32
-[System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
+[System.Security.Cryptography.RandomNumberGenerator]::Fill($bytes)
 [Convert]::ToBase64String($bytes)
 ```
 
-Copy the output **privately** into Cloudflare's encrypted `AUTH_PEPPER` secret. Store or rotate it through secret management; rotating it invalidates unexpired codes and the rate-limiting identity hashes.
+Keep secrets out of any `EXPO_PUBLIC_*` variable and GitHub repository. These `EXPO_PUBLIC_*` variables are embedded in the iPhone application.
 
 ## 3. Deploy code and test
 
@@ -63,7 +67,7 @@ Test:
 
 `https://telemetry-family-api.alankarsharma44.workers.dev/health`
 
-Expected: `databaseConnected: true`, `emailSchemaReady: true`, `emailSendingConfigured: true`, **`familySharingReady: false`**. A successful email-code request requires the `EMAIL_FROM` variable, `AUTH_PEPPER` secret, an email-sending binding/provider, and verified sender domain.
+Expected: `databaseConnected: true`, `emailSchemaReady: true`, `emailSendingConfigured: true`, **`familySharingReady: false`**. A successful email-code request requires the `EMAIL_FROM` variable, `AUTH_PEPPER` secret, a valid Resend Free key, and verified sender domain.
 
 ## 4. Email authentication endpoints
 
@@ -94,6 +98,5 @@ These tests simulate D1 with SQLite locally and a mock sender. Live delivery, Wo
 
 References:
 
-- https://developers.cloudflare.com/email-service/get-started/send-emails/
-- https://developers.cloudflare.com/email-service/api/send-emails/workers-api/
+- https://resend.com/pricing
 - https://developers.cloudflare.com/d1/worker-api/d1-database/
