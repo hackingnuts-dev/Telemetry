@@ -1,102 +1,45 @@
-# Telemetry Family — Cloudflare Email Authentication
+# Telemetry Family — Cloudflare Access Free
 
-This directory contains the D1-backed Cloudflare Worker sign-in API. The live Worker must still be updated separately; committing code to GitHub does not deploy it.
+Cloudflare Access One-time PIN sends email codes, no email sending provider or domain purchase. The new Worker source is `src/index.mjs`.
 
-## Existing Cloudflare resources
+**Do not create the currently drafted Worker-wide Access application.** Worker-wide protection blocks the iPhone's public token-exchange endpoint and WebSocket upgrades. Cloudflare documents hostname/path-specific Access separately.
 
-- Worker: `telemetry-family-api`
-- D1: `telemetry-family-db` (binding `DB`)
-- Production address: `https://telemetry-family-api.alankarsharma44.workers.dev`
-- Main Worker source: [src/index.mjs](src/index.mjs)
-- New migration: [migrations/0002_email_auth.sql](migrations/0002_email_auth.sql)
+## 1. Create a path-scoped Access application
 
-The original nine family tables are preserved. Migration `0002_email_auth.sql` adds `email_accounts`, `email_challenges`, `email_sessions`, and `email_auth_limits`. Email accounts are **deliberately separate** from legacy phone-only `users`: the family-sharing endpoints remain disabled until migrated and independently security-tested.
+Cancel the unsaved **Workers**-destination application form. Keep the existing reusable policy `Telemetry Family Allow` with only your approved email addresses.
 
-## 1. Apply the email-auth migration
+Create a new **Self-hosted and private → Public DNS / public hostname** Access application, if your account offers it for `workers.dev` routes:
+- Hostname: `telemetry-family-api.alankarsharma44.workers.dev`
+- Path: `/auth/access/complete` **only**
+- Policy: `Telemetry Family Allow`
+- Identity provider: `One-time PIN`
+- Name: `Telemetry Family Sign-in`
 
-Use **Cloudflare → Storage & databases → D1 → telemetry-family-db → Console**, then run the SQL in `migrations/0002_email_auth.sql`, preserving line breaks. If the Console accepts only one statement, execute one `CREATE TABLE` or `CREATE INDEX` statement at a time.
+Verify Access protects this exact path and leaves `/health` and `/v1/auth/access/exchange` outside Access. Cloudflare's official documentation supports specific path-protected `workers.dev` hostnames; your dashboard may render the fields differently. Never use an Everyone / Bypass rule.
 
-Verify:
+## 2. Database migration
 
+The existing four `email_*` tables are reused. In Cloudflare D1 Console, execute the SQL from `migrations/0003_access_exchange.sql`. Verify:
 ```sql
-SELECT name FROM sqlite_master
-WHERE type='table' AND name LIKE 'email_%' ORDER BY name;
+SELECT name FROM sqlite_master WHERE name='access_login_codes';
 ```
 
-Expect all four tables listed above. Do not run the old `0001_initial.sql` again in the dashboard; the original schema already exists.
+## 3. Worker deployment
 
-## 2. Free-only email verification setup
+After setting up the path-based Access application, copy the **Raw** contents of `src/index.mjs` into the existing `telemetry-family-api` Worker's editor and deploy it (or deploy with Wrangler using `wrangler.jsonc`). The existing D1 binding `DB` must remain attached.
 
-**Do not purchase Workers Paid.** Cloudflare Email Sending for arbitrary recipients requires Workers Paid. Telemetry uses the optional **Resend Free** transactional email API instead, which offers 3,000 emails/month with a 100/day limit. Do not subscribe to Pro or turn on pay-as-you-go. When the free quota is exhausted, sending should stop rather than automatically incurring overages. See https://resend.com/pricing.
+No Resend key, `AUTH_PEPPER`, Cloudflare Email Sending, or paid service is needed for Access email OTP.
 
-For real family addresses, Resend requires verifying a sender domain that you **already own**. An existing domain configured with Cloudflare DNS can be used without upgrading Cloudflare. If you do not own a domain, this setup is **not yet a zero-cost way to send email to arbitrary family addresses**; do not buy one without deciding to spend money. Resend's test sender is limited to test recipients and cannot be used for general family onboarding.
+## 4. Sign-in security
 
-1. Sign up for Resend Free: https://resend.com
-2. Add and verify a domain you already own (follow Resend SPF/DKIM instructions in Cloudflare DNS).
-3. Generate a Resend API key restricted to email sending; do not commit or share it.
-4. In **Cloudflare Worker → Settings → Variables and Secrets**, set:
-   - `RESEND_API_KEY`: **encrypted secret**, your Resend API key
-   - `AUTH_PEPPER`: **encrypted secret**, a locally generated high-entropy value (at least 32 characters)
-   - `EMAIL_FROM`: **text variable**, sender address at your verified domain (for example `login@YOUR-OWN-DOMAIN`)
-   - `DB`: existing D1 binding `telemetry-family-db`.
-5. There is **no Cloudflare Email Sending binding**. Do not add a binding named `EMAIL`, and do not click **Purchase Workers Paid**.
+The iPhone uses the system authentication browser (`ASWebAuthenticationSession`). Access validates email sign-in on the protected path. The Worker reads identity only through `ctx.access`, then creates a **90-second one-time exchange code** tied to a cryptographic proof verifier and client state. The code is returned to `telemetry://family-auth`; the iPhone exchanges it for a short-lived, hashed, revocable D1-backed app session.
 
-Generate a random `AUTH_PEPPER` locally in PowerShell (never paste the result in chat):
+Only the browser-login path is protected by Access. All public API endpoints independently require a valid app session token; all family invitation, location, sharing, and history endpoints continue to return HTTP 503 until their per-user consent ACLs are implemented.
 
-```powershell
-$bytes = New-Object byte[] 32
-[System.Security.Cryptography.RandomNumberGenerator]::Fill($bytes)
-[Convert]::ToBase64String($bytes)
-```
+## 5. iPhone build
 
-Keep secrets out of any `EXPO_PUBLIC_*` variable and GitHub repository. These `EXPO_PUBLIC_*` variables are embedded in the iPhone application.
+Set GitHub Actions variable `EXPO_PUBLIC_FAMILY_API_URL` to `https://telemetry-family-api.alankarsharma44.workers.dev`, run the manual iPhone workflow, and install the resulting signed-by-Sideloadly app.
 
-## 3. Deploy code and test
+**Acceptance testing:** verify (1) browser email OTP login with an allowed address, (2) disallowed address denied by Access, (3) app token exchange succeeds once only, (4) `/v1/me` requires token, (5) logout revokes token, and (6) `/v1/location` remains unavailable.
 
-**Option A (Dashboard):** Open Worker → Edit code → replace the starter Worker code with the contents of `cloudflare/src/index.mjs` (Raw on GitHub). Click Deploy. The source is one self-contained JavaScript module.
-
-**Option B (CLI):** From the `cloudflare/` directory, with Wrangler authenticated to the correct Cloudflare account:
-
-```bash
-npx wrangler deploy
-```
-
-The declared `DB` binding ID must match the live D1 database. Avoid deploying CLI configuration over dashboard-managed secrets/bindings without checking that settings are in sync.
-
-Test:
-
-`https://telemetry-family-api.alankarsharma44.workers.dev/health`
-
-Expected: `databaseConnected: true`, `emailSchemaReady: true`, `emailSendingConfigured: true`, **`familySharingReady: false`**. A successful email-code request requires the `EMAIL_FROM` variable, `AUTH_PEPPER` secret, a valid Resend Free key, and verified sender domain.
-
-## 4. Email authentication endpoints
-
-- `POST /v1/auth/email/start`: `{"email":"person@example.com"}` → `{"challengeId":"...","expiresInSeconds":600}`. A 6-digit code is sent **only** by email.
-- `POST /v1/auth/email/verify`: `{"email":"person@example.com","challengeId":"...","code":"123456","name":"Name"}` → random bearer `token` and account info.
-- `GET /v1/me`: `Authorization: Bearer <token>`
-- `POST /v1/auth/logout`: revokes the same bearer token.
-
-Codes have a 10-minute lifetime, up to five guesses per code, one-time consumption, and separate email/IP D1 rate limits. Sessions last seven days. Tokens are stored hashed in D1. Location access is **not** authorized through email sign-in alone. All family contact, location, invitation, history, and sharing endpoints intentionally respond with HTTP 503 until properly ported.
-
-**Never publicly deploy test-code bypasses**, return a verification code in an API response, or store auth secrets in a repository.
-
-## 5. iPhone application
-
-Once sign-in is deployed and tested, add a GitHub Actions repository variable named `EXPO_PUBLIC_FAMILY_API_URL` with value:
-
-`https://telemetry-family-api.alankarsharma44.workers.dev`
-
-Then rebuild the manually triggered **Telemetry iPhone for Windows** IPA and install it via Sideloadly. The Family Safety screen will offer email sign-in, but **not** shared location until the authenticated and consent-protected family APIs are implemented.
-
-## Automated checks
-
-```bash
-node --test cloudflare/tests/email-auth.test.mjs
-```
-
-These tests simulate D1 with SQLite locally and a mock sender. Live delivery, Worker deployment, and physical iPhone authentication are separate acceptance tests.
-
-References:
-
-- https://resend.com/pricing
-- https://developers.cloudflare.com/d1/worker-api/d1-database/
+Cloudflare docs: https://developers.cloudflare.com/workers/configuration/cloudflare-access/
