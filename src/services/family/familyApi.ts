@@ -1,13 +1,10 @@
 import * as SecureStore from 'expo-secure-store';
-import * as Battery from 'expo-battery';
+import * as Crypto from 'expo-crypto';
+import * as WebBrowser from 'expo-web-browser';
 import type { LocationSnapshot } from '../../core/types';
-import { getSettings } from '../../core/settings';
 
-const FAMILY_URL = (process.env.EXPO_PUBLIC_FAMILY_API_URL || '').replace(/\/$/, '');
-const SESSION_KEY = 'telemetry.family.session.v1';
-const SHARING_KEY = 'telemetry.family.sharing.v1';
-const CHALLENGE_KEY = 'telemetry.family.email_challenge.v1';
-let lastFamilyUpload = 0;
+const BASE = (process.env.EXPO_PUBLIC_FAMILY_API_URL || '').replace(/\/$/, '');
+const TOKEN_KEY = 'telemetry.family.session.v1';
 
 export type FamilyUser = {
   id: string;
@@ -16,141 +13,80 @@ export type FamilyUser = {
   sharingEnabled: boolean;
   familyReady: boolean;
 };
-export type FamilyContact = {
-  id: string;
-  name: string;
-  phone: string;
-  sharing: boolean;
-  latitude: number | null;
-  longitude: number | null;
-  battery: number | null;
-  updatedAt: string | null;
-  online: boolean;
-};
-export type FamilyInvite = { id: string; from_name: string; from_phone: string };
-export const familyConfigured = () =>
-  FAMILY_URL.startsWith('https://') && !FAMILY_URL.includes('example.com');
 
-async function request<T>(path: string, method = 'GET', body?: object, loggedIn = true): Promise<T> {
-  if (!familyConfigured())
-    throw new Error('Set EXPO_PUBLIC_FAMILY_API_URL to the deployed HTTPS family server and rebuild.');
-  const token = loggedIn ? await SecureStore.getItemAsync(SESSION_KEY) : null;
-  if (loggedIn && !token) throw new Error('Sign in to your family account');
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 15000);
-  try {
-    const res = await fetch(FAMILY_URL + path, {
-      method,
-      headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: 'Bearer ' + token } : {}) },
-      body: body ? JSON.stringify(body) : undefined,
-      signal: controller.signal,
-    });
-    const data = (await res.json()) as T & { error?: string };
-    if (!res.ok) throw new Error(data.error || 'Family service error (' + res.status + ')');
-    return data;
-  } finally {
-    clearTimeout(timer);
-  }
+export function familyConfigured(): boolean {
+  return BASE.startsWith('https://') && !BASE.includes('example.com');
 }
-export async function startFamilyLogin(email: string): Promise<void> {
-  const result = await request<{ challengeId: string }>(
-    '/v1/auth/email/start',
-    'POST',
-    { email: email.trim().toLowerCase() },
-    false,
-  );
-  await SecureStore.setItemAsync(CHALLENGE_KEY, result.challengeId);
+
+async function api<T>(path: string, method = 'GET', body?: object, token?: string): Promise<T> {
+  if (!familyConfigured()) throw new Error('The Telemetry Family server has not been connected.');
+  const result = await fetch(BASE + path, {
+    method,
+    headers: {
+      Accept: 'application/json',
+      ...(body ? { 'Content-Type': 'application/json' } : {}),
+      ...(token ? { Authorization: 'Bearer ' + token } : {}),
+    },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const contentType = result.headers.get('content-type') || '';
+  if (!contentType.includes('application/json'))
+    throw new Error('Cloudflare Access sign-in configuration needs attention.');
+  const data = (await result.json()) as T & { error?: string };
+  if (!result.ok) throw new Error(data.error || 'Family authentication failed.');
+  return data;
 }
-export async function verifyFamilyLogin(email: string, code: string, name: string): Promise<FamilyUser> {
-  const challengeId = await SecureStore.getItemAsync(CHALLENGE_KEY);
-  if (!challengeId) throw new Error('Request a new email code first');
-  const result = await request<{ token: string; user: FamilyUser }>(
-    '/v1/auth/email/verify',
-    'POST',
-    { email: email.trim().toLowerCase(), code: code.trim(), challengeId, name },
-    false,
-  );
-  await SecureStore.setItemAsync(SESSION_KEY, result.token);
-  await SecureStore.deleteItemAsync(CHALLENGE_KEY);
-  // Email authentication does not authorize family location sharing.
-  await SecureStore.setItemAsync(SHARING_KEY, 'false');
-  return result.user;
+
+function randomHex(length: number): string {
+  return Array.from(Crypto.getRandomBytes(length), (n) => n.toString(16).padStart(2, '0')).join('');
 }
+
+/** System browser handles Access OTP. PKCE-style code exchange avoids sending a session in a deep link. */
+export async function signInWithCloudflareAccess(): Promise<FamilyUser> {
+  if (!familyConfigured()) throw new Error('Family server is not connected.');
+  const state = randomHex(16);
+  const verifier = randomHex(32);
+  const challenge = await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, verifier);
+  const redirectUri = 'telemetry://family-auth';
+  const loginUrl = BASE + '/auth/access/complete?state=' + state + '&challenge=' + challenge;
+  const result = await WebBrowser.openAuthSessionAsync(loginUrl, redirectUri);
+  if (result.type !== 'success') throw new Error('Sign-in was cancelled.');
+  const callback = new URL(result.url);
+  if (callback.protocol !== 'telemetry:' || callback.hostname !== 'family-auth')
+    throw new Error('Unexpected sign-in callback.');
+  const receivedState = callback.searchParams.get('state');
+  const code = callback.searchParams.get('code');
+  if (receivedState !== state || !code || !/^[a-f0-9]{64}$/.test(code))
+    throw new Error('Invalid or outdated login. Please try again.');
+  const data = await api<{ token: string; user: FamilyUser }>('/v1/auth/access/exchange', 'POST', {
+    code,
+    state,
+    verifier,
+  });
+  await SecureStore.setItemAsync(TOKEN_KEY, data.token);
+  return data.user;
+}
+
 export async function familyMe(): Promise<FamilyUser> {
-  const response = await request<{ user: FamilyUser }>('/v1/me');
-  await SecureStore.setItemAsync(
-    SHARING_KEY,
-    response.user.familyReady && response.user.sharingEnabled ? 'true' : 'false',
-  );
-  return response.user;
+  const token = await SecureStore.getItemAsync(TOKEN_KEY);
+  if (!token) throw new Error('Please sign in.');
+  return (await api<{ user: FamilyUser }>('/v1/me', 'GET', undefined, token)).user;
 }
-export const familyContacts = async () =>
-  (await request<{ contacts: FamilyContact[] }>('/v1/family/contacts')).contacts;
-export const familyInvites = async () =>
-  (await request<{ invitations: FamilyInvite[] }>('/v1/invites')).invitations;
-export type FamilyViewer = { id: string; name: string; phone: string };
-export async function familyViewers(): Promise<FamilyViewer[]> {
-  const result = await request<{ viewers: FamilyViewer[] }>('/v1/family/viewers');
-  return result.viewers;
-}
-export async function revokeFamilyViewer(id: string): Promise<void> {
-  await request('/v1/family/shares/' + encodeURIComponent(id), 'DELETE');
-}
-export async function inviteFamily(phone: string): Promise<void> {
-  await request('/v1/invites', 'POST', { phone });
-}
-export async function acceptFamilyInvite(id: string): Promise<void> {
-  await request('/v1/invites/' + encodeURIComponent(id) + '/accept', 'POST', {});
-  await SecureStore.setItemAsync(SHARING_KEY, 'true');
-}
-export async function declineFamilyInvite(id: string): Promise<void> {
-  await request('/v1/invites/' + encodeURIComponent(id) + '/decline', 'POST', {});
-}
-export async function familyPause(enabled: boolean): Promise<FamilyUser> {
-  const r = await request<{ user: FamilyUser }>('/v1/family/sharing', 'POST', { enabled });
-  await SecureStore.setItemAsync(SHARING_KEY, r.user.sharingEnabled ? 'true' : 'false');
-  return r.user;
-}
-export async function familyHistory(id: string): Promise<number> {
-  const x = await request<{ history: unknown[] }>(
-    '/v1/family/contacts/' + encodeURIComponent(id) + '/history',
-  );
-  return x.history.length;
-}
+
 export async function familySignOut(): Promise<void> {
+  const token = await SecureStore.getItemAsync(TOKEN_KEY);
   try {
-    await request('/v1/auth/logout', 'POST', {});
+    if (token && familyConfigured()) await api('/v1/auth/logout', 'POST', {}, token);
   } finally {
-    await SecureStore.deleteItemAsync(SESSION_KEY);
-    await SecureStore.setItemAsync(SHARING_KEY, 'false');
-    await SecureStore.deleteItemAsync(CHALLENGE_KEY);
+    await SecureStore.deleteItemAsync(TOKEN_KEY);
   }
 }
+
 export async function hasFamilySession(): Promise<boolean> {
-  return !!(await SecureStore.getItemAsync(SESSION_KEY));
+  return !!(await SecureStore.getItemAsync(TOKEN_KEY));
 }
-/** Best-effort send of consented location observations, not hidden logging. Backend re-checks ACL. */
-export async function publishFamilyFix(fix: LocationSnapshot): Promise<void> {
-  if (!familyConfigured() || !(await hasFamilySession())) return;
-  const settings = await getSettings();
-  if (!settings.locationEnabled || (await SecureStore.getItemAsync(SHARING_KEY)) !== 'true') return;
-  const now = Date.now();
-  if (now - lastFamilyUpload < 120000) return;
-  lastFamilyUpload = now;
-  try {
-    // A different signed-in device may have paused sharing. Check server policy
-    // before sending coordinates, so paused users don't even transmit a fix.
-    const me = await familyMe();
-    if (!me.sharingEnabled) return;
-    const level = await Battery.getBatteryLevelAsync().catch(() => -1);
-    await request('/v1/location', 'POST', {
-      lat: fix.latitude,
-      lng: fix.longitude,
-      accuracy: fix.accuracy,
-      ...(level >= 0 ? { battery: Math.round(level * 100) } : {}),
-    });
-  } catch {
-    lastFamilyUpload = 0;
-    // No coordinates or credentials are written to logs. Next OS callback can retry.
-  }
+
+/** Family location uploads remain disabled until per-contact sharing ACLs exist on Cloudflare. */
+export async function publishFamilyFix(_fix: LocationSnapshot): Promise<void> {
+  return;
 }
