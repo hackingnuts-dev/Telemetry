@@ -4,6 +4,7 @@ import * as WebBrowser from 'expo-web-browser';
 import type { LocationSnapshot } from '../../core/types';
 
 const BASE = (process.env.EXPO_PUBLIC_FAMILY_API_URL || '').replace(/\/$/, '');
+const AUTH_BASE = (process.env.EXPO_PUBLIC_FAMILY_AUTH_URL || '').replace(/\/$/, '');
 const TOKEN_KEY = 'telemetry.family.session.v1';
 
 export type FamilyUser = {

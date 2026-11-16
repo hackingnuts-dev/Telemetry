@@ -14,7 +14,7 @@ async function hash(str) {
 }
 function emailOf(identity) {
  const email=typeof identity?.email==='string'?identity.email.trim().toLowerCase():'';
- return email.length<=254 && /^[^\\s@]+@[^\\s@]+\\.[^\\s@]{2,}$/.test(email) && !email.includes('..')?email:null;
+ return email.length<=254 && /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email) && !email.includes('..')?email:null;
 }
 async function accessComplete(req, env, ctx) {
   // This context is populated by the Cloudflare Access edge after policy checks.
