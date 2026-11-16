@@ -16,8 +16,12 @@ export type FamilyUser = {
 };
 
 export function familyConfigured(): boolean {
-  return BASE.startsWith('https://') && !BASE.includes('example.com') &&
-    AUTH_BASE.startsWith('https://') && !AUTH_BASE.includes('example.com');
+  return (
+    BASE.startsWith('https://') &&
+    !BASE.includes('example.com') &&
+    AUTH_BASE.startsWith('https://') &&
+    !AUTH_BASE.includes('example.com')
+  );
 }
 
 async function api<T>(path: string, method = 'GET', body?: object, token?: string): Promise<T> {
