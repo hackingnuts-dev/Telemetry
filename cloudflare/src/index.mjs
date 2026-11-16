@@ -22,7 +22,11 @@ function reject(status, message) {
 export function normalizeEmail(value) {
   if (typeof value !== 'string') return null;
   const email = value.trim().toLowerCase();
-  if (email.length > 254 || !/^[a-z0-9.!#$%&'*+/=?^_\`{|}~-]+@[a-z0-9](?:[a-z0-9.-]{0,251}[a-z0-9])?\.[a-z]{2,}$/i.test(email)) return null;
+  if (
+    email.length > 254 ||
+    !/^[a-z0-9.!#$%&'*+/=?^_\`{|}~-]+@[a-z0-9](?:[a-z0-9.-]{0,251}[a-z0-9])?\.[a-z]{2,}$/i.test(email)
+  )
+    return null;
   if (email.includes('..') || email.startsWith('.') || email.includes('.@')) return null;
   return email;
 }
@@ -31,17 +35,28 @@ export function validCode(value) {
 }
 async function digest(value) {
   const b = await crypto.subtle.digest('SHA-256', ENCODER.encode(value));
-  return Array.from(new Uint8Array(b), n => n.toString(16).padStart(2, '0')).join('');
+  return Array.from(new Uint8Array(b), (n) => n.toString(16).padStart(2, '0')).join('');
 }
 async function mac(secret, value) {
-  const key = await crypto.subtle.importKey('raw', ENCODER.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  const key = await crypto.subtle.importKey(
+    'raw',
+    ENCODER.encode(secret),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign'],
+  );
   const result = await crypto.subtle.sign('HMAC', key, ENCODER.encode(value));
-  return Array.from(new Uint8Array(result), n => n.toString(16).padStart(2, '0')).join('');
+  return Array.from(new Uint8Array(result), (n) => n.toString(16).padStart(2, '0')).join('');
 }
 function configured(env) {
-  return !!(env.DB && typeof env.AUTH_PEPPER === 'string' && env.AUTH_PEPPER.length >= 32 &&
-    typeof env.EMAIL_FROM === 'string' && normalizeEmail(env.EMAIL_FROM) &&
-    (typeof env.EMAIL?.send === 'function' || typeof env.RESEND_API_KEY === 'string'));
+  return !!(
+    env.DB &&
+    typeof env.AUTH_PEPPER === 'string' &&
+    env.AUTH_PEPPER.length >= 32 &&
+    typeof env.EMAIL_FROM === 'string' &&
+    normalizeEmail(env.EMAIL_FROM) &&
+    (typeof env.EMAIL?.send === 'function' || typeof env.RESEND_API_KEY === 'string')
+  );
 }
 async function parseBody(req) {
   if (!req.headers.get('Content-Type')?.includes('application/json')) throw reject(415, 'JSON body required');
@@ -60,12 +75,16 @@ async function throttle(env, category, id, limit, now) {
   const windowStart = Math.floor(now / RATE_WINDOW_MS) * RATE_WINDOW_MS;
   const result = await env.DB.prepare(
     'INSERT INTO email_auth_limits(key_hash,window_start,hits) VALUES (?,?,1) ' +
-    'ON CONFLICT(key_hash,window_start) DO UPDATE SET hits=hits+1 RETURNING hits',
-  ).bind(keyHash, windowStart).first();
+      'ON CONFLICT(key_hash,window_start) DO UPDATE SET hits=hits+1 RETURNING hits',
+  )
+    .bind(keyHash, windowStart)
+    .first();
   if (!result || result.hits > limit) throw reject(429, 'Too many requests. Try again later.');
 }
 async function deliver(env, email, code) {
-  const text = 'Your Telemetry Family sign-in code is ' + code +
+  const text =
+    'Your Telemetry Family sign-in code is ' +
+    code +
     '. It expires in 10 minutes. If you did not request this, you can ignore this message.';
   if (env.EMAIL?.send) {
     await env.EMAIL.send({ to: email, from: env.EMAIL_FROM, subject: 'Telemetry Family sign-in code', text });
@@ -73,7 +92,12 @@ async function deliver(env, email, code) {
     const r = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: { Authorization: 'Bearer ' + env.RESEND_API_KEY, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ from: env.EMAIL_FROM, to: [email], subject: 'Telemetry Family sign-in code', text }),
+      body: JSON.stringify({
+        from: env.EMAIL_FROM,
+        to: [email],
+        subject: 'Telemetry Family sign-in code',
+        text,
+      }),
     });
     if (!r.ok) throw Error('Delivery failed');
   } else {
@@ -87,14 +111,15 @@ async function authenticate(req, env) {
   const now = Date.now();
   const account = await env.DB.prepare(
     'SELECT a.id,a.email,a.display_name FROM email_sessions s ' +
-    'JOIN email_accounts a ON a.id=s.account_id WHERE s.token_hash=? AND s.expires_at>?',
-  ).bind(tokenHash, now).first();
+      'JOIN email_accounts a ON a.id=s.account_id WHERE s.token_hash=? AND s.expires_at>?',
+  )
+    .bind(tokenHash, now)
+    .first();
   if (!account) throw reject(401, 'Session expired. Sign in again.');
   return { account, tokenHash };
 }
 function publicUser(row) {
-  return { id: row.id, email: row.email, name: row.display_name,
-    sharingEnabled: false, familyReady: false };
+  return { id: row.id, email: row.email, name: row.display_name, sharingEnabled: false, familyReady: false };
 }
 async function start(req, env) {
   if (!configured(env)) return json({ error: 'Email service not configured' }, 503);
@@ -108,7 +133,9 @@ async function start(req, env) {
   const emailKey = await mac(env.AUTH_PEPPER, 'email:' + email);
   const mostRecent = await env.DB.prepare(
     'SELECT created_at FROM email_challenges WHERE email_key=? ORDER BY created_at DESC LIMIT 1',
-  ).bind(emailKey).first();
+  )
+    .bind(emailKey)
+    .first();
   if (mostRecent && now - mostRecent.created_at < 60_000) throw reject(429, 'Try again in one minute');
   const challengeId = crypto.randomUUID();
   const digits = new Uint32Array(1);
@@ -116,8 +143,9 @@ async function start(req, env) {
   const code = String(digits[0] % 1_000_000).padStart(6, '0');
   const codeMac = await mac(env.AUTH_PEPPER, 'code:' + challengeId + ':' + email + ':' + code);
   await env.DB.batch([
-    env.DB.prepare('UPDATE email_challenges SET consumed_at=? WHERE email_key=? AND consumed_at IS NULL')
-      .bind(now, emailKey),
+    env.DB.prepare(
+      'UPDATE email_challenges SET consumed_at=? WHERE email_key=? AND consumed_at IS NULL',
+    ).bind(now, emailKey),
     env.DB.prepare(
       'INSERT INTO email_challenges(id,email_key,code_mac,created_at,expires_at,attempts) VALUES (?,?,?,?,?,0)',
     ).bind(challengeId, emailKey, codeMac, now, now + CODE_LIFETIME_MS),
@@ -125,7 +153,9 @@ async function start(req, env) {
   try {
     await deliver(env, email, code);
   } catch {
-    await env.DB.prepare('UPDATE email_challenges SET consumed_at=? WHERE id=?').bind(Date.now(), challengeId).run();
+    await env.DB.prepare('UPDATE email_challenges SET consumed_at=? WHERE id=?')
+      .bind(Date.now(), challengeId)
+      .run();
     return json({ error: 'Email could not be delivered. Check your sending configuration.' }, 503);
   }
   return json({ ok: true, challengeId, expiresInSeconds: 600 });
@@ -147,30 +177,39 @@ async function verify(req, env) {
   const codeMac = await mac(env.AUTH_PEPPER, 'code:' + id + ':' + email + ':' + code);
   const consumed = await env.DB.prepare(
     'UPDATE email_challenges SET consumed_at=? WHERE id=? AND email_key=? AND code_mac=? ' +
-    'AND consumed_at IS NULL AND expires_at>? AND attempts<5 RETURNING id',
-  ).bind(now, id, emailKey, codeMac, now).first();
+      'AND consumed_at IS NULL AND expires_at>? AND attempts<5 RETURNING id',
+  )
+    .bind(now, id, emailKey, codeMac, now)
+    .first();
   if (!consumed) {
     await env.DB.prepare(
       'UPDATE email_challenges SET attempts=attempts+1 WHERE id=? AND email_key=? ' +
-      'AND consumed_at IS NULL AND expires_at>? AND attempts<5',
-    ).bind(id, emailKey, now).run();
+        'AND consumed_at IS NULL AND expires_at>? AND attempts<5',
+    )
+      .bind(id, emailKey, now)
+      .run();
     throw reject(401, 'Incorrect, expired, or already-used code');
   }
-  const name = typeof body.name === 'string' && body.name.trim().length <= 60 &&
-    body.name.trim().length > 0 ? body.name.trim() : 'Family member';
+  const name =
+    typeof body.name === 'string' && body.name.trim().length <= 60 && body.name.trim().length > 0
+      ? body.name.trim()
+      : 'Family member';
   const row = await env.DB.prepare(
     'INSERT INTO email_accounts(id,email,display_name,created_at) VALUES (?,?,?,?) ' +
-    'ON CONFLICT(email) DO UPDATE SET email=excluded.email ' +
-    'RETURNING id,email,display_name',
-  ).bind(crypto.randomUUID(), email, name, now).first();
+      'ON CONFLICT(email) DO UPDATE SET email=excluded.email ' +
+      'RETURNING id,email,display_name',
+  )
+    .bind(crypto.randomUUID(), email, name, now)
+    .first();
   const bytes = new Uint8Array(32);
   crypto.getRandomValues(bytes);
-  const sessionToken = Array.from(bytes, n => n.toString(16).padStart(2, '0')).join('');
+  const sessionToken = Array.from(bytes, (n) => n.toString(16).padStart(2, '0')).join('');
   await env.DB.prepare(
     'INSERT INTO email_sessions(token_hash,account_id,created_at,expires_at) VALUES (?,?,?,?)',
-  ).bind(await digest(sessionToken), row.id, now, now + SESSION_LIFETIME_MS).run();
-  return json({ token: sessionToken, expiresInSeconds: SESSION_LIFETIME_MS / 1000,
-    user: publicUser(row) });
+  )
+    .bind(await digest(sessionToken), row.id, now, now + SESSION_LIFETIME_MS)
+    .run();
+  return json({ token: sessionToken, expiresInSeconds: SESSION_LIFETIME_MS / 1000, user: publicUser(row) });
 }
 async function fetchHandler(request, env) {
   const pathname = new URL(request.url).pathname;
@@ -181,15 +220,19 @@ async function fetchHandler(request, env) {
       const rows = await env.DB.prepare(
         "SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'email_%'",
       ).all();
-      return json({ service: 'Telemetry Family API', databaseConnected: true,
-        emailSchemaReady: needed.every(n => rows.results.some(r => r.name === n)),
+      return json({
+        service: 'Telemetry Family API',
+        databaseConnected: true,
+        emailSchemaReady: needed.every((n) => rows.results.some((r) => r.name === n)),
         emailSendingConfigured: !!(env.EMAIL?.send || env.RESEND_API_KEY),
-        familySharingReady: false });
+        familySharingReady: false,
+      });
     } catch {
       return json({ databaseConnected: false, familySharingReady: false }, 503);
     }
   }
-  if (!pathname.startsWith('/v1/')) return json({ service: 'Telemetry Family API', familySharingReady: false }, 503);
+  if (!pathname.startsWith('/v1/'))
+    return json({ service: 'Telemetry Family API', familySharingReady: false }, 503);
   if (pathname === '/v1/auth/email/start' && request.method === 'POST') return start(request, env);
   if (pathname === '/v1/auth/email/verify' && request.method === 'POST') return verify(request, env);
   if (pathname === '/v1/me' && request.method === 'GET') {
@@ -208,10 +251,11 @@ async function fetchHandler(request, env) {
 }
 export default {
   async fetch(request, env) {
-    try { return await fetchHandler(request, env); }
-    catch (error) {
-      const status = Number.isInteger(error?.status) && error.status >= 400 && error.status < 500
-        ? error.status : 503;
+    try {
+      return await fetchHandler(request, env);
+    } catch (error) {
+      const status =
+        Number.isInteger(error?.status) && error.status >= 400 && error.status < 500 ? error.status : 503;
       return json({ error: status === 503 ? 'Service temporarily unavailable' : error.message }, status);
     }
   },

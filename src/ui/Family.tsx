@@ -33,7 +33,9 @@ export default function Family({ onBack }: Props) {
         // The user may sign in again if their old session is invalid or expired.
       }
     })();
-    return () => { mounted = false; };
+    return () => {
+      mounted = false;
+    };
   }, []);
 
   const run = async (task: () => Promise<void>) => {
@@ -65,12 +67,15 @@ export default function Family({ onBack }: Props) {
         <Text style={s.link}>‹ Dashboard</Text>
       </Pressable>
       <Text style={s.title}>Family safety</Text>
-      <Text style={s.sub}>Your family account is private. Sharing requires a separate, explicit invitation and permission.</Text>
+      <Text style={s.sub}>
+        Your family account is private. Sharing requires a separate, explicit invitation and permission.
+      </Text>
       {!familyConfigured() ? (
         <View style={s.card}>
           <Text style={s.heading}>Family server not connected</Text>
           <Text style={s.sub}>
-            Deploy the email-auth Worker, then configure EXPO_PUBLIC_FAMILY_API_URL in GitHub Actions and reinstall the iPhone app.
+            Deploy the email-auth Worker, then configure EXPO_PUBLIC_FAMILY_API_URL in GitHub Actions and
+            reinstall the iPhone app.
           </Text>
         </View>
       ) : !user ? (
@@ -79,7 +84,10 @@ export default function Family({ onBack }: Props) {
           <Text style={s.sub}>We'll email a six-digit code. No phone number or password is required.</Text>
           <TextInput
             value={email}
-            onChangeText={(value) => { setEmail(value); setCodeRequested(false); }}
+            onChangeText={(value) => {
+              setEmail(value);
+              setCodeRequested(false);
+            }}
             keyboardType="email-address"
             autoComplete="email"
             autoCapitalize="none"
@@ -99,7 +107,10 @@ export default function Family({ onBack }: Props) {
           {button('Email me a sign-in code', async () => {
             await startFamilyLogin(email);
             setCodeRequested(true);
-            Alert.alert('Check your inbox', 'Enter the six-digit code sent to your email. It expires in 10 minutes.');
+            Alert.alert(
+              'Check your inbox',
+              'Enter the six-digit code sent to your email. It expires in 10 minutes.',
+            );
           })}
           {codeRequested ? (
             <>
@@ -130,17 +141,22 @@ export default function Family({ onBack }: Props) {
             Family location sharing is not activated yet. The Cloudflare backend still needs invitation,
             per-contact authorization, and history endpoints. No family location data is uploaded.
           </Text>
-          {button('Sign out', async () => {
-            await familySignOut();
-            setUser(null);
-            setCode('');
-            setCodeRequested(false);
-          }, true)}
+          {button(
+            'Sign out',
+            async () => {
+              await familySignOut();
+              setUser(null);
+              setCode('');
+              setCodeRequested(false);
+            },
+            true,
+          )}
         </View>
       )}
       {busy ? <ActivityIndicator color={C.blue} /> : null}
       <Text style={s.sub}>
-        Email sign-in does not authorize location tracking. Every contact will control who can see their location when sharing is enabled.
+        Email sign-in does not authorize location tracking. Every contact will control who can see their
+        location when sharing is enabled.
       </Text>
     </View>
   );
@@ -153,8 +169,22 @@ const s = StyleSheet.create({
   heading: { color: C.text, fontSize: 18, fontWeight: '800' },
   label: { color: C.text, fontSize: 15, fontWeight: '700' },
   sub: { color: C.muted, fontSize: 12, lineHeight: 19 },
-  notice: { color: C.text, fontSize: 13, lineHeight: 21, backgroundColor: C.paleBlue, padding: 12, borderRadius: 10 },
-  card: { backgroundColor: C.surface, borderColor: C.line, borderWidth: 1, borderRadius: 16, padding: 18, gap: 12 },
+  notice: {
+    color: C.text,
+    fontSize: 13,
+    lineHeight: 21,
+    backgroundColor: C.paleBlue,
+    padding: 12,
+    borderRadius: 10,
+  },
+  card: {
+    backgroundColor: C.surface,
+    borderColor: C.line,
+    borderWidth: 1,
+    borderRadius: 16,
+    padding: 18,
+    gap: 12,
+  },
   input: { borderColor: C.line, borderWidth: 1, borderRadius: 10, padding: 12, color: C.text, fontSize: 16 },
   button: { backgroundColor: C.blue, padding: 14, borderRadius: 10, alignItems: 'center' },
   buttonText: { color: '#fff', fontWeight: '700', fontSize: 14 },

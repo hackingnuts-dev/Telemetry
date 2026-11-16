@@ -30,6 +30,7 @@ Expect all four tables listed above. Do not run the old `0001_initial.sql` again
 Preferred: **Cloudflare Dashboard → Compute → Email Service → Email Sending**. Onboard a domain you control in Cloudflare DNS; follow sender-domain verification instructions. Configure the Worker with a `send_email` binding named `EMAIL`. The repository's `wrangler.jsonc` declares this binding for CLI deployments; you must add/verify it on the live Worker too.
 
 Set Worker **Settings → Variables and Secrets**:
+
 - `EMAIL_FROM` (**plain text variable**): a verified sender address such as `login@yourdomain.com` (substitute your real domain)
 - `AUTH_PEPPER` (**encrypted secret**): a newly generated random 32-byte-or-longer high-entropy value (do not commit, send, or screenshot it)
 - `DB` (**D1 binding**): already connected to `telemetry-family-db`
@@ -92,6 +93,7 @@ node --test cloudflare/tests/email-auth.test.mjs
 These tests simulate D1 with SQLite locally and a mock sender. Live delivery, Worker deployment, and physical iPhone authentication are separate acceptance tests.
 
 References:
+
 - https://developers.cloudflare.com/email-service/get-started/send-emails/
 - https://developers.cloudflare.com/email-service/api/send-emails/workers-api/
 - https://developers.cloudflare.com/d1/worker-api/d1-database/

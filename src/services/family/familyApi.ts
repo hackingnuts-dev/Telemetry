@@ -9,7 +9,13 @@ const SHARING_KEY = 'telemetry.family.sharing.v1';
 const CHALLENGE_KEY = 'telemetry.family.email_challenge.v1';
 let lastFamilyUpload = 0;
 
-export type FamilyUser = { id: string; email: string; name: string; sharingEnabled: boolean; familyReady: boolean };
+export type FamilyUser = {
+  id: string;
+  email: string;
+  name: string;
+  sharingEnabled: boolean;
+  familyReady: boolean;
+};
 export type FamilyContact = {
   id: string;
   name: string;
@@ -48,7 +54,10 @@ async function request<T>(path: string, method = 'GET', body?: object, loggedIn 
 }
 export async function startFamilyLogin(email: string): Promise<void> {
   const result = await request<{ challengeId: string }>(
-    '/v1/auth/email/start', 'POST', { email: email.trim().toLowerCase() }, false,
+    '/v1/auth/email/start',
+    'POST',
+    { email: email.trim().toLowerCase() },
+    false,
   );
   await SecureStore.setItemAsync(CHALLENGE_KEY, result.challengeId);
 }
@@ -69,7 +78,10 @@ export async function verifyFamilyLogin(email: string, code: string, name: strin
 }
 export async function familyMe(): Promise<FamilyUser> {
   const response = await request<{ user: FamilyUser }>('/v1/me');
-  await SecureStore.setItemAsync(SHARING_KEY, response.user.familyReady && response.user.sharingEnabled ? 'true' : 'false');
+  await SecureStore.setItemAsync(
+    SHARING_KEY,
+    response.user.familyReady && response.user.sharingEnabled ? 'true' : 'false',
+  );
   return response.user;
 }
 export const familyContacts = async () =>
