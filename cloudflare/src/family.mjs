@@ -165,7 +165,7 @@ export async function family(req, env, account, path) {
   if (path === '/v1/family/contacts' && req.method === 'GET') {
     const r = await q(
       env,
-      'SELECT a.id,a.display_name AS name,a.email,p.enabled,l.latitude,l.longitude,l.battery,l.observed_at FROM family_shares s JOIN email_accounts a ON a.id=s.subject_id LEFT JOIN family_privacy p ON p.account_id=a.id LEFT JOIN family_latest l ON l.account_id=a.id AND p.enabled=1 WHERE s.viewer_id=? LIMIT 100',
+      'SELECT a.id,a.display_name AS name,a.email,p.enabled,l.latitude,l.longitude,l.battery,l.observed_at FROM family_shares s JOIN email_accounts a ON a.id=s.subject_id LEFT JOIN family_privacy p ON p.account_id=a.id LEFT JOIN family_latest l ON l.account_id=a.id AND p.enabled=1 AND l.observed_at>=s.consented_at WHERE s.viewer_id=? LIMIT 100',
       me,
     ).all();
     return ok({
@@ -188,7 +188,8 @@ export async function family(req, env, account, path) {
       throw fail(403, 'This contact has not shared location with you');
     const r = await q(
       env,
-      'SELECT latitude,longitude,accuracy,battery,observed_at FROM family_history WHERE account_id=? AND observed_at>? ORDER BY observed_at ASC LIMIT 500',
+      'SELECT h.latitude,h.longitude,h.accuracy,h.battery,h.observed_at FROM family_history h JOIN family_shares s ON s.subject_id=h.account_id AND s.viewer_id=? WHERE h.account_id=? AND h.observed_at>? AND h.observed_at>=s.consented_at ORDER BY h.observed_at ASC LIMIT 500',
+      me,
       history[1],
       now - DAY,
     ).all();
