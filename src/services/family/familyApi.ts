@@ -187,6 +187,7 @@ export async function publishFamilyFix(
 
 export type FamilySyncResult = {
   contacts: FamilyContact[];
+  ownFix: LocationSnapshot | null;
   uploaded: boolean;
   message: string;
 };
@@ -199,6 +200,7 @@ export async function syncFamilyNow(): Promise<FamilySyncResult> {
   const status = await familyStatus();
   const settings = await getSettings();
   let uploaded = false;
+  let ownFix: LocationSnapshot | null = null;
   let message = 'Family contact locations refreshed. Your location is not being shared.';
 
   if (status.sharingEnabled && status.authorizedViewers > 0 && settings.locationEnabled) {
@@ -208,15 +210,13 @@ export async function syncFamilyNow(): Promise<FamilySyncResult> {
         const fresh = await Location.getCurrentPositionAsync({
           accuracy: Location.Accuracy.Balanced,
         });
-        uploaded = await publishFamilyFix(
-          {
-            latitude: fresh.coords.latitude,
-            longitude: fresh.coords.longitude,
-            accuracy: fresh.coords.accuracy,
-            recordedAt: Math.round(fresh.timestamp),
-          },
-          { force: true },
-        );
+        ownFix = {
+          latitude: fresh.coords.latitude,
+          longitude: fresh.coords.longitude,
+          accuracy: fresh.coords.accuracy,
+          recordedAt: Math.round(fresh.timestamp),
+        };
+        uploaded = await publishFamilyFix(ownFix, { force: true });
         message = uploaded
           ? 'Your newest location was shared with approved contacts.'
           : 'Family locations refreshed, but your latest location could not be uploaded.';
@@ -232,5 +232,5 @@ export async function syncFamilyNow(): Promise<FamilySyncResult> {
     message = 'Family locations refreshed. Enable Location in Settings to share yours.';
   }
   const contacts = await familyContacts();
-  return { contacts, uploaded, message };
+  return { contacts, ownFix, uploaded, message };
 }
