@@ -1,6 +1,9 @@
 import * as SecureStore from 'expo-secure-store';
 import * as Crypto from 'expo-crypto';
 import * as WebBrowser from 'expo-web-browser';
+import * as Location from 'expo-location';
+import * as Battery from 'expo-battery';
+import { getSettings } from '../../core/settings';
 import type { LocationSnapshot } from '../../core/types';
 
 const BASE = (process.env.EXPO_PUBLIC_FAMILY_API_URL || '').replace(/\/$/, '');
@@ -137,6 +140,10 @@ export async function setFamilySharing(enabled: boolean): Promise<void> {
   const result = await authenticated<{ sharingEnabled: boolean }>('/v1/family/sharing', 'POST', { enabled });
   await SecureStore.setItemAsync(SHARING_KEY, result.sharingEnabled ? 'true' : 'false');
 }
+/** Your own explicit authorization makes a connection reciprocal; it never turns on location sharing. */
+export async function shareMyLocationWithContact(id: string): Promise<void> {
+  await authenticated('/v1/family/contacts/' + encodeURIComponent(id) + '/share-back', 'POST', {});
+}
 export async function revokeFamilyViewer(id: string): Promise<void> {
   await authenticated('/v1/family/viewers/' + encodeURIComponent(id), 'DELETE');
 }
@@ -146,30 +153,84 @@ export async function getFamilyHistory(id: string): Promise<number> {
   ).history.length;
 }
 
-/** Send only an owner-approved location observation to consented contacts. */
-export async function publishFamilyFix(fix: LocationSnapshot): Promise<void> {
-  if (!familyConfigured() || !(await hasFamilySession())) return;
-  const settings = await import('../../core/settings').then((m) => m.getSettings());
-  if (!settings.locationEnabled || (await SecureStore.getItemAsync(SHARING_KEY)) !== 'true') return;
+/** Upload only a fix the owner opted to share with at least one authorized contact. */
+export async function publishFamilyFix(
+  fix: LocationSnapshot,
+  options: { force?: boolean } = {},
+): Promise<boolean> {
+  if (!familyConfigured() || !(await hasFamilySession())) return false;
+  const settings = await getSettings();
+  if (!settings.locationEnabled || (await SecureStore.getItemAsync(SHARING_KEY)) !== 'true')
+    return false;
   const now = Date.now();
-  if (now - lastUpload < 120000) return;
-  lastUpload = now;
+  if (!options.force && now - lastUpload < 120000) return false;
   try {
     const status = await familyStatus();
     if (!status.sharingEnabled || status.authorizedViewers < 1) {
-      await SecureStore.setItemAsync(SHARING_KEY, 'false');
-      return;
+      if (!status.sharingEnabled) await SecureStore.setItemAsync(SHARING_KEY, 'false');
+      return false;
     }
-    const Battery = await import('expo-battery');
-    const battery = await Battery.getBatteryLevelAsync().catch(() => -1);
+    const level = await Battery.getBatteryLevelAsync().catch(() => -1);
     await authenticated('/v1/location', 'POST', {
       lat: fix.latitude,
       lng: fix.longitude,
       accuracy: fix.accuracy,
-      ...(battery >= 0 ? { battery: Math.round(battery * 100) } : {}),
+      ...(level >= 0 ? { battery: Math.round(level * 100) } : {}),
     });
+    lastUpload = Date.now();
+    return true;
   } catch {
-    lastUpload = 0;
-    // No coordinates, login tokens, or account data written to logs.
+    // Background tasks retry next time. Never log coordinates or tokens.
+    return false;
   }
+}
+
+export type FamilySyncResult = {
+  contacts: FamilyContact[];
+  uploaded: boolean;
+  message: string;
+};
+
+/** User-initiated family refresh, separate from the legacy enterprise event outbox. */
+export async function syncFamilyNow(): Promise<FamilySyncResult> {
+  if (!familyConfigured() || !(await hasFamilySession())) {
+    throw new Error('Sign in to Family Safety first to refresh shared locations.');
+  }
+  const status = await familyStatus();
+  const settings = await getSettings();
+  let uploaded = false;
+  let message = 'Family contact locations refreshed. Your location is not being shared.';
+
+  if (status.sharingEnabled && status.authorizedViewers > 0 && settings.locationEnabled) {
+    const permission = await Location.getForegroundPermissionsAsync();
+    if (permission.granted) {
+      try {
+        const fresh = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Balanced,
+        });
+        uploaded = await publishFamilyFix(
+          {
+            latitude: fresh.coords.latitude,
+            longitude: fresh.coords.longitude,
+            accuracy: fresh.coords.accuracy,
+            recordedAt: Math.round(fresh.timestamp),
+          },
+          { force: true },
+        );
+        message = uploaded
+          ? 'Your newest location was shared with approved contacts.'
+          : 'Family locations refreshed, but your latest location could not be uploaded.';
+      } catch {
+        message = 'Family locations refreshed. A fresh GPS fix was unavailable.';
+      }
+    } else {
+      message = 'Family locations refreshed. Enable Location permission to share yours.';
+    }
+  } else if (status.sharingEnabled && status.authorizedViewers === 0) {
+    message = 'Family locations refreshed. No contacts are currently authorized to view yours.';
+  } else if (status.sharingEnabled && !settings.locationEnabled) {
+    message = 'Family locations refreshed. Enable Location in Settings to share yours.';
+  }
+  const contacts = await familyContacts();
+  return { contacts, uploaded, message };
 }
