@@ -3,6 +3,7 @@ import { ActivityIndicator, Pressable, StyleSheet, Switch, Text, TextInput, View
 import type { TelemetrySettings, PhoneStatus } from '../core/types';
 import type { LocationMode } from '../services/location/locationService';
 import { getUsageCapability } from '../services/usage/UsageTelemetry';
+import { syncConfigured } from '../services/sync/syncService';
 import { C } from './theme';
 
 type Props = {
@@ -61,6 +62,7 @@ export default function Settings({
   const [number, setNumber] = useState('');
   const [code, setCode] = useState('');
   const usage = getUsageCapability();
+  const enterpriseAvailable = syncConfigured();
   return (
     <View style={s.root}>
       <Pressable accessibilityRole="button" onPress={onBack}>
@@ -87,9 +89,11 @@ export default function Settings({
         <View style={s.separator} />
         <ToggleRow
           title="Sync Data"
-          detail="Upload eligible encrypted-transport events to your corporate service when configured and signed in."
+          detail={enterpriseAvailable
+            ? "Optional corporate device-event sync. This is separate from Family Safety location sharing."
+            : "Corporate event server not configured. Family Safety still refreshes through Cloudflare."}
           value={settings.syncEnabled}
-          disabled={busy}
+          disabled={busy || !enterpriseAvailable}
           onChange={(value) => void onToggle('syncEnabled', value)}
         />
       </View>
@@ -111,15 +115,20 @@ export default function Settings({
       {settings.locationEnabled && locationMode === 'background' ? (
         <Text style={s.detail}>Background location is enabled. iOS decides when updates arrive.</Text>
       ) : null}
-      <Text style={s.sectionTitle}>Optional phone verification</Text>
+      <Text style={s.sectionTitle}>Phone number (optional)</Text>
       <View style={s.card}>
         <Text style={s.detail}>
           Phone on file: {phone.masked} · {phone.status.replace('_', ' ')}
         </Text>
         <Text style={s.detail}>
-          Your phone cannot be read reliably across Android and iOS. Enter it voluntarily and verify it with a
-          server-issued code.
+          iOS cannot reliably reveal your phone number. A phone number cannot locate another iPhone. Family tracking uses email sign-in, the other person's consent, and their Telemetry installation.
         </Text>
+        {!enterpriseAvailable ? (
+          <Text style={s.detail}>
+            Phone verification is not available in this free email-based Family Safety setup. No SMS or phone lookup is performed.
+          </Text>
+        ) : (
+        <>
         <TextInput
           style={s.input}
           value={number}
@@ -157,11 +166,12 @@ export default function Settings({
             </Pressable>
           </View>
         ) : null}
+        </>
+        )}
       </View>
       {busy ? <ActivityIndicator color={C.blue} /> : null}
       <Text style={s.disclosure}>
-        No screen recordings are collected. Phone verification requires enterprise sign-in and a configured
-        verification server.
+        No screen recordings are collected. Family sharing requires explicit authorization, not a phone number.
       </Text>
     </View>
   );
