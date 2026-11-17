@@ -157,7 +157,7 @@ export default function Family({ onBack }: Props) {
           <View style={s.card}>
             <Text style={s.heading}>Invite family or friends</Text>
             <Text style={s.sub}>
-              Enter their email. They'll see your invitation after signing in to Telemetry. No email
+              Enter their email. They will see your invitation after signing in to Telemetry. No email
               invitation is sent yet.
             </Text>
             <TextInput
