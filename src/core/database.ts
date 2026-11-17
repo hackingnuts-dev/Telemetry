@@ -109,7 +109,7 @@ export async function queueEvent(event: TelemetryEvent): Promise<void> {
     Date.now(),
   );
 }
-export async function pendingEvents(): Promise<Array<{ id: string; body: string; retry_count: number }>> {
+export async function pendingEvents(): Promise<{ id: string; body: string; retry_count: number }[]> {
   const db = await database();
   return db.getAllAsync(
     'SELECT id,body,retry_count FROM outbox WHERE next_attempt_at <= ? ORDER BY created_at LIMIT 50',

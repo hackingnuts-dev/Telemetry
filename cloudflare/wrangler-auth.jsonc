@@ -7,7 +7,7 @@
     {
       "binding": "DB",
       "database_name": "telemetry-family-db",
-      "database_id": "33201ec4-fd33-4e17-a645-cb47191777c5"
-    }
-  ]
+      "database_id": "33201ec4-fd33-4e17-a645-cb47191777c5",
+    },
+  ],
 }
