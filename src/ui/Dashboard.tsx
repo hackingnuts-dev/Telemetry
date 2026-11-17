@@ -222,7 +222,7 @@ export default function Dashboard({
           </Text>
         </View>
         <Text style={s.footerNote}>
-          Optional contact detail only. A phone number cannot reveal another person's location. Family access
+          Optional contact detail only. A phone number cannot reveal the location of another person. Family access
           uses verified email and consent.
         </Text>
       </View>

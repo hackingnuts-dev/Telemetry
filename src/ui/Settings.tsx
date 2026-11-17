@@ -124,7 +124,7 @@ export default function Settings({
         </Text>
         <Text style={s.detail}>
           iOS cannot reliably reveal your phone number. A phone number cannot locate another iPhone. Family
-          tracking uses email sign-in, the other person's consent, and their Telemetry installation.
+          tracking uses email sign-in, the consent of the other person, and their Telemetry installation.
         </Text>
         {!enterpriseAvailable ? (
           <Text style={s.detail}>
