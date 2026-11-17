@@ -1,7 +1,8 @@
 import React from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import type { LocationSnapshot, TelemetrySettings, PhoneStatus } from '../core/types';
 import type { LocationMode } from '../services/location/locationService';
+import type { FamilyContact } from '../services/family/familyApi';
 import { C } from './theme';
 
 type Props = {
@@ -12,6 +13,9 @@ type Props = {
   location: LocationSnapshot | null;
   phone: { masked: string; status: PhoneStatus };
   pending: number;
+  familyLocations: FamilyContact[];
+  familyConnected: boolean;
+  enterpriseSyncAvailable: boolean;
   syncing: boolean;
   onSync: () => void;
   onSettings: () => void;
@@ -47,6 +51,9 @@ export default function Dashboard({
   location,
   phone,
   pending,
+  familyLocations,
+  familyConnected,
+  enterpriseSyncAvailable,
   syncing,
   onSync,
   onSettings,
@@ -56,6 +63,25 @@ export default function Dashboard({
   const locationLabel = location
     ? `${location.latitude.toFixed(5)}, ${location.longitude.toFixed(5)}`
     : 'Not recorded';
+  const openMap = async (provider: 'apple' | 'google', lat: number, lng: number) => {
+    const coordinates = lat + ',' + lng;
+    const url = provider === 'apple'
+      ? 'https://maps.apple.com/?ll=' + coordinates
+      : 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(coordinates);
+    await Linking.openURL(url);
+  };
+  const mapActions = (lat: number, lng: number) => (
+    <View style={s.mapActions}>
+      <Pressable accessibilityRole="button" style={s.mapButton}
+        onPress={() => void openMap('apple', lat, lng)}>
+        <Text style={s.mapButtonText}>Apple Maps</Text>
+      </Pressable>
+      <Pressable accessibilityRole="button" style={s.mapButton}
+        onPress={() => void openMap('google', lat, lng)}>
+        <Text style={s.mapButtonText}>Google Maps</Text>
+      </Pressable>
+    </View>
+  );
   const updated = location
     ? new Date(location.recordedAt).toLocaleString()
     : 'Only after permission is granted';
@@ -101,21 +127,61 @@ export default function Dashboard({
         />
         <Tile
           icon="↗"
-          label="SYNC QUEUE"
+          label="LOCAL EVENT LOG"
           value={`${pending} events`}
-          detail={settings.syncEnabled ? 'Ready when signed in and online' : 'Sync currently disabled'}
+          detail={enterpriseSyncAvailable ? 'Optional enterprise telemetry events' : 'Encrypted locally; no enterprise sync configured'}
         />
       </View>
       <View style={s.card}>
         <View style={s.cardHeader}>
-          <Text style={s.cardTitle}>Last known location</Text>
+          <Text style={s.cardTitle}>My last known location</Text>
           <Text style={s.cardGlyph}>⌖</Text>
         </View>
         <Text style={s.coordinate}>{locationLabel}</Text>
-        <Text style={s.muted}>{updated}</Text>
+        <Text style={s.muted}>Recorded: {updated}</Text>
+        {location ? mapActions(location.latitude, location.longitude) : null}
         <Text style={s.footerNote}>
           Raw coordinates remain encrypted on this phone. Only eligible zone and dwell events are queued for
           upload.
+        </Text>
+      </View>
+      <View style={s.card}>
+        <View style={s.cardHeader}>
+          <Text style={s.cardTitle}>Family last shared locations</Text>
+          <Text style={s.cardGlyph}>⌖</Text>
+        </View>
+        {!familyConnected ? (
+          <Text style={s.muted}>Open Family safety to connect your Cloudflare account.</Text>
+        ) : familyLocations.length === 0 ? (
+          <Text style={s.muted}>
+            No family members currently sharing. Each person must approve their own sharing permission.
+          </Text>
+        ) : (
+          familyLocations.map((contact) => (
+            <View key={contact.id} style={s.familyLocation}>
+              <Text style={s.familyName}>{contact.name} · {contact.email}</Text>
+              {contact.sharing && contact.latitude != null && contact.longitude != null ? (
+                <>
+                  <Text style={s.coordinate}>
+                    {contact.latitude.toFixed(6)}, {contact.longitude.toFixed(6)}
+                  </Text>
+                  <Text style={s.muted}>
+                    Last reported: {contact.updatedAt
+                      ? new Date(contact.updatedAt).toLocaleString()
+                      : 'Not available'} · Battery {contact.battery ?? '—'}%
+                  </Text>
+                  {mapActions(contact.latitude, contact.longitude)}
+                </>
+              ) : (
+                <Text style={s.muted}>
+                  {contact.sharing ? 'Waiting for their first shared location update.' : 'Sharing paused'}
+                </Text>
+              )}
+            </View>
+          ))
+        )}
+        <Text style={s.footerNote}>
+          Coordinates refresh when the app is open. External maps display the last reported pin, not a continuously moving marker.
         </Text>
       </View>
       <View style={s.card}>
@@ -142,21 +208,21 @@ export default function Dashboard({
           </Text>
         </View>
         <Text style={s.footerNote}>
-          Optional account attribute. A separate installation ID identifies this device.
+          Optional contact detail only. A phone number cannot reveal another person's location. Family access uses verified email and consent.
         </Text>
       </View>
       <Pressable style={s.familyButton} onPress={onFamily} accessibilityRole="button">
         <Text style={s.familyText}>Family & friends · Connected contacts</Text>
       </Pressable>
       <Pressable
-        style={[s.primary, (!settings.syncEnabled || syncing) && s.disabled]}
+        style={[s.primary, syncing && s.disabled]}
         onPress={onSync}
-        disabled={!settings.syncEnabled || syncing}
+        disabled={syncing}
         accessibilityRole="button"
       >
-        {syncing ? <ActivityIndicator color="#fff" /> : <Text style={s.primaryText}>Sync now</Text>}
+        {syncing ? <ActivityIndicator color="#fff" /> : <Text style={s.primaryText}>{familyConnected ? 'Refresh family locations' : 'Sync now'}</Text>}
       </Pressable>
-      <Text style={s.bottomText}>You can pause collection or syncing at any time in Settings.</Text>
+      <Text style={s.bottomText}>Family sharing is separate from enterprise event syncing. You can pause location collection in Settings.</Text>
     </View>
   );
 }
@@ -212,6 +278,11 @@ const s = StyleSheet.create({
   cardTitle: { fontSize: 15, fontWeight: '800', color: C.text },
   cardGlyph: { color: C.blue, fontSize: 22 },
   coordinate: { fontSize: 19, fontWeight: '700', color: C.text, marginTop: 8 },
+  familyLocation: { paddingVertical: 11, borderTopWidth: 1, borderTopColor: C.line, gap: 3 },
+  familyName: { color: C.text, fontSize: 14, fontWeight: '700' },
+  mapActions: { flexDirection: 'row', gap: 10, marginTop: 10 },
+  mapButton: { backgroundColor: C.paleBlue, borderRadius: 8, padding: 10, flex: 1, alignItems: 'center' },
+  mapButtonText: { color: C.blue, fontWeight: '700', fontSize: 12 },
   footerNote: { color: C.muted, fontSize: 11, lineHeight: 17, marginTop: 14 },
   status: {
     alignSelf: 'flex-start',
