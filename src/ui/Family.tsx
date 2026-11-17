@@ -273,7 +273,8 @@ export default function Family({ onBack }: Props) {
                     </Text>
                     <Text style={s.sub}>Last reported position, refreshed when Telemetry is open.</Text>
                     <Text style={s.sub}>
-                      GPS accuracy: {contact.accuracy == null ? 'Not reported' : '±' + Math.round(contact.accuracy) + ' m'}
+                      GPS accuracy:{' '}
+                      {contact.accuracy == null ? 'Not reported' : '±' + Math.round(contact.accuracy) + ' m'}
                     </Text>
                     {button('Show location', async () => {
                       const coords = contact.latitude + ',' + contact.longitude;
@@ -281,15 +282,20 @@ export default function Family({ onBack }: Props) {
                         { text: 'Cancel', style: 'cancel' },
                         {
                           text: 'Apple Maps',
-                          onPress: () => void Linking.openURL(
-                            'https://maps.apple.com/?q=' + encodeURIComponent(coords) + '&ll=' + encodeURIComponent(coords),
-                          ),
+                          onPress: () =>
+                            void Linking.openURL(
+                              'https://maps.apple.com/?q=' +
+                                encodeURIComponent(coords) +
+                                '&ll=' +
+                                encodeURIComponent(coords),
+                            ),
                         },
                         {
                           text: 'Google Maps',
-                          onPress: () => void Linking.openURL(
-                            'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(coords),
-                          ),
+                          onPress: () =>
+                            void Linking.openURL(
+                              'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(coords),
+                            ),
                         },
                       ]);
                     })}

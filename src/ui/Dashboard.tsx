@@ -71,8 +71,23 @@ export default function Dashboard({
         const coords = lat + ',' + lng;
         Alert.alert('Show last reported location', label + ' · ' + coords, [
           { text: 'Cancel', style: 'cancel' },
-          { text: 'Apple Maps', onPress: () => void Linking.openURL('https://maps.apple.com/?q=' + encodeURIComponent(coords) + '&ll=' + encodeURIComponent(coords)) },
-          { text: 'Google Maps', onPress: () => void Linking.openURL('https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(coords)) },
+          {
+            text: 'Apple Maps',
+            onPress: () =>
+              void Linking.openURL(
+                'https://maps.apple.com/?q=' +
+                  encodeURIComponent(coords) +
+                  '&ll=' +
+                  encodeURIComponent(coords),
+              ),
+          },
+          {
+            text: 'Google Maps',
+            onPress: () =>
+              void Linking.openURL(
+                'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(coords),
+              ),
+          },
         ]);
       }}
     >
@@ -169,7 +184,8 @@ export default function Dashboard({
                     {contact.latitude.toFixed(6)}, {contact.longitude.toFixed(6)}
                   </Text>
                   <Text style={s.muted}>
-                    Accuracy: {contact.accuracy == null ? 'Not reported' : '±' + Math.round(contact.accuracy) + ' m'}
+                    Accuracy:{' '}
+                    {contact.accuracy == null ? 'Not reported' : '±' + Math.round(contact.accuracy) + ' m'}
                   </Text>
                   <Text style={s.muted}>
                     Last reported:{' '}
@@ -295,7 +311,13 @@ const s = StyleSheet.create({
   coordinate: { fontSize: 19, fontWeight: '700', color: C.text, marginTop: 8 },
   familyLocation: { paddingVertical: 11, borderTopWidth: 1, borderTopColor: C.line, gap: 3 },
   familyName: { color: C.text, fontSize: 14, fontWeight: '700' },
-  mapButton: { backgroundColor: C.paleBlue, borderRadius: 8, padding: 10, alignItems: 'center', marginTop: 10 },
+  mapButton: {
+    backgroundColor: C.paleBlue,
+    borderRadius: 8,
+    padding: 10,
+    alignItems: 'center',
+    marginTop: 10,
+  },
   mapButtonText: { color: C.blue, fontWeight: '700', fontSize: 12 },
   footerNote: { color: C.muted, fontSize: 11, lineHeight: 17, marginTop: 14 },
   status: {

@@ -1,5 +1,4 @@
-// Bundled Telemetry Family API for Cloudflare dashboard editor.
-// Generated from src/family.mjs and src/index.mjs.
+// Combined Telemetry Family Worker for the Cloudflare dashboard.
 // Telemetry Family consent-gated handlers. Email-authenticated accounts only.
 // Invitees must sign in via Cloudflare Access; creating an invite does not send email.
 const DAY = 86400000;
@@ -189,7 +188,7 @@ async function family(req, env, account, path) {
   if (path === '/v1/family/contacts' && req.method === 'GET') {
     const r = await q(
       env,
-      'SELECT a.id,a.display_name AS name,a.email,p.enabled,l.latitude,l.longitude,l.battery,l.observed_at FROM family_shares s JOIN email_accounts a ON a.id=s.subject_id LEFT JOIN family_privacy p ON p.account_id=a.id LEFT JOIN family_latest l ON l.account_id=a.id AND p.enabled=1 AND l.observed_at>=s.consented_at WHERE s.viewer_id=? LIMIT 100',
+      'SELECT a.id,a.display_name AS name,a.email,p.enabled,l.latitude,l.longitude,l.accuracy,l.battery,l.observed_at FROM family_shares s JOIN email_accounts a ON a.id=s.subject_id LEFT JOIN family_privacy p ON p.account_id=a.id LEFT JOIN family_latest l ON l.account_id=a.id AND p.enabled=1 AND l.observed_at>=s.consented_at WHERE s.viewer_id=? LIMIT 100',
       me,
     ).all();
     return ok({
@@ -201,6 +200,7 @@ async function family(req, env, account, path) {
         latitude: c.enabled === 1 ? (c.latitude ?? null) : null,
         longitude: c.enabled === 1 ? (c.longitude ?? null) : null,
         battery: c.enabled === 1 ? (c.battery ?? null) : null,
+        accuracy: c.enabled === 1 ? (c.accuracy ?? null) : null,
         updatedAt: c.enabled === 1 ? (c.observed_at ?? null) : null,
         online: c.enabled === 1 && c.observed_at != null && now - c.observed_at < 600000,
       })),
