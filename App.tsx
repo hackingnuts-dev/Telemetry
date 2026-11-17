@@ -114,7 +114,7 @@ export default function App() {
     });
     const interval = setInterval(() => {
       if (AppState.currentState === 'active') void refresh().catch(() => {});
-    }, 60_000);
+    }, 30_000);
     return () => {
       mounted = false;
       listener.remove();
