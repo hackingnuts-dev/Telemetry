@@ -98,9 +98,15 @@ export async function hasFamilySession(): Promise<boolean> {
 }
 
 export type FamilyContact = {
-  id: string; name: string; email: string; sharing: boolean;
-  latitude: number | null; longitude: number | null; battery: number | null;
-  updatedAt: number | null; online: boolean;
+  id: string;
+  name: string;
+  email: string;
+  sharing: boolean;
+  latitude: number | null;
+  longitude: number | null;
+  battery: number | null;
+  updatedAt: number | null;
+  online: boolean;
 };
 export type FamilyInvitation = { id: string; from_name: string; from_email: string; created_at: number };
 export type FamilyViewer = { id: string; name: string; email: string };
@@ -135,13 +141,15 @@ export async function revokeFamilyViewer(id: string): Promise<void> {
   await authenticated('/v1/family/viewers/' + encodeURIComponent(id), 'DELETE');
 }
 export async function getFamilyHistory(id: string): Promise<number> {
-  return (await authenticated<{history: unknown[]}>('/v1/family/contacts/' + encodeURIComponent(id) + '/history')).history.length;
+  return (
+    await authenticated<{ history: unknown[] }>('/v1/family/contacts/' + encodeURIComponent(id) + '/history')
+  ).history.length;
 }
 
 /** Send only an owner-approved location observation to consented contacts. */
 export async function publishFamilyFix(fix: LocationSnapshot): Promise<void> {
   if (!familyConfigured() || !(await hasFamilySession())) return;
-  const settings = await import('../../core/settings').then(m => m.getSettings());
+  const settings = await import('../../core/settings').then((m) => m.getSettings());
   if (!settings.locationEnabled || (await SecureStore.getItemAsync(SHARING_KEY)) !== 'true') return;
   const now = Date.now();
   if (now - lastUpload < 120000) return;
