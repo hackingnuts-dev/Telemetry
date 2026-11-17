@@ -168,8 +168,10 @@ export default function Dashboard({
                   <Text style={s.coordinate}>
                     {contact.latitude.toFixed(6)}, {contact.longitude.toFixed(6)}
                   </Text>
-                  <Te<Text style={s.muted}>Accuracy: {contact.accuracy == null ? 'Not reported' : '±' + Math.round(contact.accuracy) + ' m'}</Text>
-                   xt style={s.muted}>
+                  <Text style={s.muted}>
+                    Accuracy: {contact.accuracy == null ? 'Not reported' : '±' + Math.round(contact.accuracy) + ' m'}
+                  </Text>
+                  <Text style={s.muted}>
                     Last reported:{' '}
                     {contact.updatedAt ? new Date(contact.updatedAt).toLocaleString() : 'Not available'} ·
                     Battery {contact.battery ?? '—'}%
