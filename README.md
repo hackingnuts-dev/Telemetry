@@ -19,10 +19,10 @@ The workflow is **manual only** so pushes to `main` do not automatically consume
 - Opt-in foreground and background location, with iOS-controlled timing.
 - SQLCipher-encrypted on-device observations; user-visible dashboard and battery status.
 - Family Safety sign-in via **Cloudflare Access One-time PIN** using the iPhone system browser (no domain purchase, SMS, or external email provider).
-- Family invitations and location sharing remain **disabled** until the Cloudflare API supports verified consent and access control.
+- Family email invitations, per-person reciprocal sharing permissions, explicit sharing pause, and authorized location history are available in the Cloudflare backend after deploying the latest bundle.
 - App usage metadata remains unavailable until the necessary Apple entitlement and native implementation exist.
 
-**Cloudflare Access iPhone sign-in is implemented in source, not deployed or physically tested.** See [cloudflare/](cloudflare/README.md). Cloudflare Access now protects the dedicated `telemetry-family-auth` Worker; `telemetry-family-api` remains separate. The migration `0003_access_exchange.sql` and a `DB` binding on the auth Worker are required before deployment. The previous Node/PostgreSQL SMS server remains under `server/` as legacy source only. Family invitations, shared contacts, and live maps remain disabled pending per-user consent authorization.
+**Cloudflare Access iPhone sign-in was validated on a physical iPhone.** See [cloudflare/](cloudflare/README.md). Cloudflare Access now protects the dedicated `telemetry-family-auth` Worker; `telemetry-family-api` remains separate. The migration `0003_access_exchange.sql` and a `DB` binding on the auth Worker are required before deployment. The previous Node/PostgreSQL SMS server remains under `server/` as legacy source only. Family invitations and shared last-known positions require the updated Cloudflare Family API bundle; interactive moving maps, push alerts, and geofences remain future work.
 
 The repository is publicly visible; never commit private email addresses, session tokens, or API secrets. GitHub Actions may still be blocked by your account-level billing restriction, which cannot be resolved by changing the workflow. See [iPhone build guidance](docs/BUILD.md).
 
@@ -49,10 +49,31 @@ Do not purchase Workers Paid, email delivery services, a domain, or any GitHub s
 
 ## Current authentication architecture
 
-The protected browser endpoint is `/auth/access/complete`, on `telemetry-family-auth.alankarsharma44.workers.dev`. The Worker uses Cloudflare's authenticated identity through `ctx.access`, then redirects a 90-second code to the app; the app uses proof-of-possession and a one-time exchange for a short-lived session. **Protect the dedicated auth Worker only**. The separate Family API Worker must use its own authenticated session checks. No location data is shared until explicit per-contact consent APIs are implemented.
+The protected browser endpoint is `/auth/access/complete`, on `telemetry-family-auth.alankarsharma44.workers.dev`. The Worker uses Cloudflare's authenticated identity through `ctx.access`, then redirects a 90-second code to the app; the app uses proof-of-possession and a one-time exchange for a short-lived session. **Protect the dedicated auth Worker only**. The separate Family API Worker must use its own authenticated session checks. Location uploads are permitted only while the owner has explicitly enabled sharing and authorized one or more viewers.
 
 For iPhone auth, configure BOTH `EXPO_PUBLIC_FAMILY_API_URL` and `EXPO_PUBLIC_FAMILY_AUTH_URL` in GitHub Actions repository variables before building. See [Cloudflare setup](cloudflare/README.md).
 
-## Family invitations and consent sharing (staged)
+## Family safety — two-way sharing and map locations
 
-A new D1 schema and Cloudflare API module under [cloudflare/](cloudflare/README.md) support email invitations, explicit acceptance, separate opt-in location uploads, pause/revoke, and authorized contact history. **These changes are in GitHub only; they are not deployed to your Cloudflare Workers or installed on any iPhone.** The email invitation is in-app only and sends no email. Apply `0004_family_sharing.sql` first, then deploy both Worker JavaScript modules as a bundled deployment. Family tracking must never be enabled without each person's consent.
+The current implementation displays **My last known location** and **Family last shared locations** together on the iPhone dashboard, with coordinates, the last-reported timestamp, and links to **Apple Maps** and **Google Maps**. The app polls for family updates every 30 seconds while foregrounded, but this is *not* guaranteed instantaneous GPS tracking: iOS controls background callbacks, and maps opened through external links show a snapshot, not a self-moving live marker.
+
+### To enable reciprocal visibility
+
+Inviting A to see B originally created **B → A** sharing only. The updated Family Safety screen offers **Allow them to see my location** on a contact that already shares with you. The owner must tap Allow and separately turn on their **Share my location** switch. Each person may pause or revoke access independently. The server accepts no phone-number-only requests to track a device.
+
+### The Refresh family locations button
+
+This is a Family API operation, **not** the legacy enterprise `/v1/telemetry/batches` outbox. It refreshes authorized contacts and, if Location permission is enabled, refreshes your own local coordinate. It uploads your location only if sharing is explicitly on and at least one viewer is authorized. Legacy zone/dwell event logs stay encrypted locally unless a *separate* corporate event server is configured.
+
+### Phone number limitations
+
+iOS cannot reliably read a SIM's primary number. No service can locate a phone simply because you enter its number. Telemetry uses **Cloudflare Access verified email + accepted sharing consent** as identity and authorization; optional phone enrollment would require its own proof-of-possession verification and is not implemented in the free Family Safety pilot.
+
+### Deploying the latest features
+
+1. Keep `telemetry-family-auth` unchanged.
+2. In **telemetry-family-api → Edit code**, paste the **Raw** contents of [cloudflare/deploy-family-api.js](cloudflare/deploy-family-api.js) and deploy. It includes the authenticated `POST /v1/family/contacts/:id/share-back` endpoint.
+3. The D1 schema from `0004_family_sharing.sql` must already be applied.
+4. Run the single manual [Telemetry iPhone for Windows workflow](https://github.com/hackingnuts-dev/Telemetry/actions/workflows/telemetry-iphone-build.yml), only within your included GitHub Actions allowance, install its IPA using Sideloadly, and test with two authorized, consenting iPhones.
+
+For further detail, see [Cloudflare deployment instructions](cloudflare/README.md).
