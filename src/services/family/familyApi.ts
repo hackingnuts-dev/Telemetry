@@ -109,6 +109,7 @@ export type FamilyContact = {
   latitude: number | null;
   longitude: number | null;
   battery: number | null;
+  accuracy: number | null;
   updatedAt: number | null;
   online: boolean;
 };

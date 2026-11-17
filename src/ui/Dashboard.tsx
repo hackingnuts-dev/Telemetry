@@ -1,5 +1,5 @@
 import React from 'react';
-import { ActivityIndicator, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import type { LocationSnapshot, TelemetrySettings, PhoneStatus } from '../core/types';
 import type { LocationMode } from '../services/location/locationService';
 import type { FamilyContact } from '../services/family/familyApi';
@@ -63,31 +63,21 @@ export default function Dashboard({
   const locationLabel = location
     ? `${location.latitude.toFixed(5)}, ${location.longitude.toFixed(5)}`
     : 'Not recorded';
-  const openMap = async (provider: 'apple' | 'google', lat: number, lng: number) => {
-    const coordinates = lat + ',' + lng;
-    const url =
-      provider === 'apple'
-        ? 'https://maps.apple.com/?ll=' + coordinates
-        : 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(coordinates);
-    await Linking.openURL(url);
-  };
-  const mapActions = (lat: number, lng: number) => (
-    <View style={s.mapActions}>
-      <Pressable
-        accessibilityRole="button"
-        style={s.mapButton}
-        onPress={() => void openMap('apple', lat, lng)}
-      >
-        <Text style={s.mapButtonText}>Apple Maps</Text>
-      </Pressable>
-      <Pressable
-        accessibilityRole="button"
-        style={s.mapButton}
-        onPress={() => void openMap('google', lat, lng)}
-      >
-        <Text style={s.mapButtonText}>Google Maps</Text>
-      </Pressable>
-    </View>
+  const mapActions = (lat: number, lng: number, label: string) => (
+    <Pressable
+      style={s.mapButton}
+      accessibilityRole="button"
+      onPress={() => {
+        const coords = lat + ',' + lng;
+        Alert.alert('Show last reported location', label + ' · ' + coords, [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Apple Maps', onPress: () => void Linking.openURL('https://maps.apple.com/?q=' + encodeURIComponent(coords) + '&ll=' + encodeURIComponent(coords)) },
+          { text: 'Google Maps', onPress: () => void Linking.openURL('https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(coords)) },
+        ]);
+      }}
+    >
+      <Text style={s.mapButtonText}>Show location</Text>
+    </Pressable>
   );
   const updated = location
     ? new Date(location.recordedAt).toLocaleString()
@@ -150,7 +140,7 @@ export default function Dashboard({
         </View>
         <Text style={s.coordinate}>{locationLabel}</Text>
         <Text style={s.muted}>Recorded: {updated}</Text>
-        {location ? mapActions(location.latitude, location.longitude) : null}
+        {location ? mapActions(location.latitude, location.longitude, 'My location') : null}
         <Text style={s.footerNote}>
           Raw coordinates remain encrypted on this phone. Only eligible zone and dwell events are queued for
           upload.
@@ -178,12 +168,13 @@ export default function Dashboard({
                   <Text style={s.coordinate}>
                     {contact.latitude.toFixed(6)}, {contact.longitude.toFixed(6)}
                   </Text>
-                  <Text style={s.muted}>
+                  <Te<Text style={s.muted}>Accuracy: {contact.accuracy == null ? 'Not reported' : '±' + Math.round(contact.accuracy) + ' m'}</Text>
+                   xt style={s.muted}>
                     Last reported:{' '}
                     {contact.updatedAt ? new Date(contact.updatedAt).toLocaleString() : 'Not available'} ·
                     Battery {contact.battery ?? '—'}%
                   </Text>
-                  {mapActions(contact.latitude, contact.longitude)}
+                  {mapActions(contact.latitude, contact.longitude, contact.name)}
                 </>
               ) : (
                 <Text style={s.muted}>
@@ -302,8 +293,7 @@ const s = StyleSheet.create({
   coordinate: { fontSize: 19, fontWeight: '700', color: C.text, marginTop: 8 },
   familyLocation: { paddingVertical: 11, borderTopWidth: 1, borderTopColor: C.line, gap: 3 },
   familyName: { color: C.text, fontSize: 14, fontWeight: '700' },
-  mapActions: { flexDirection: 'row', gap: 10, marginTop: 10 },
-  mapButton: { backgroundColor: C.paleBlue, borderRadius: 8, padding: 10, flex: 1, alignItems: 'center' },
+  mapButton: { backgroundColor: C.paleBlue, borderRadius: 8, padding: 10, alignItems: 'center', marginTop: 10 },
   mapButtonText: { color: C.blue, fontWeight: '700', fontSize: 12 },
   footerNote: { color: C.muted, fontSize: 11, lineHeight: 17, marginTop: 14 },
   status: {

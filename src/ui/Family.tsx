@@ -272,21 +272,27 @@ export default function Family({ onBack }: Props) {
                       {contact.latitude.toFixed(6)}, {contact.longitude.toFixed(6)}
                     </Text>
                     <Text style={s.sub}>Last reported position, refreshed when Telemetry is open.</Text>
-                    {button('Open Apple Maps', async () => {
-                      await Linking.openURL(
-                        'https://maps.apple.com/?ll=' + contact.latitude + ',' + contact.longitude,
-                      );
+                    <Text style={s.sub}>
+                      GPS accuracy: {contact.accuracy == null ? 'Not reported' : '±' + Math.round(contact.accuracy) + ' m'}
+                    </Text>
+                    {button('Show location', async () => {
+                      const coords = contact.latitude + ',' + contact.longitude;
+                      Alert.alert('Show last reported location', contact.name + ' · ' + coords, [
+                        { text: 'Cancel', style: 'cancel' },
+                        {
+                          text: 'Apple Maps',
+                          onPress: () => void Linking.openURL(
+                            'https://maps.apple.com/?q=' + encodeURIComponent(coords) + '&ll=' + encodeURIComponent(coords),
+                          ),
+                        },
+                        {
+                          text: 'Google Maps',
+                          onPress: () => void Linking.openURL(
+                            'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(coords),
+                          ),
+                        },
+                      ]);
                     })}
-                    {button(
-                      'Open Google Maps',
-                      async () => {
-                        await Linking.openURL(
-                          'https://www.google.com/maps/search/?api=1&query=' +
-                            encodeURIComponent(contact.latitude + ',' + contact.longitude),
-                        );
-                      },
-                      true,
-                    )}
                     {button(
                       '24-hour history',
                       async () => {
