@@ -1,3 +1,4 @@
+import { family } from './family.mjs';
 // Public Telemetry Family API: authenticated by independently issued D1-backed sessions.
 // The separate Access-protected auth Worker is the only code allowed to mint login codes.
 const encoder = new TextEncoder();
@@ -38,7 +39,7 @@ function publicUser(user) {
     email: user.email,
     name: user.display_name,
     sharingEnabled: false,
-    familyReady: false,
+    familyReady: true,
   };
 }
 async function who(req, env) {
@@ -101,7 +102,7 @@ async function handle(req, env, ctx) {
         accessSchemaReady: ['email_accounts', 'email_sessions', 'access_login_codes'].every((x) =>
           names.has(x),
         ),
-        familySharingReady: false,
+        familySharingReady: !!(await env.DB.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='family_shares'").first()),
       });
     } catch {
       return json({ databaseConnected: false }, 503);
@@ -117,7 +118,11 @@ async function handle(req, env, ctx) {
     await env.DB.prepare('DELETE FROM email_sessions WHERE token_hash=?').bind(tokenHash).run();
     return json({ ok: true });
   }
-  return json({ error: 'Family location sharing not deployed' }, 503);
+  if (path.startsWith('/v1/')) {
+    const { user } = await who(req, env);
+    return family(req, env, user, path);
+  }
+  return json({ error: 'Unknown endpoint' }, 404);
 }
 export default {
   async fetch(req, env, ctx) {
