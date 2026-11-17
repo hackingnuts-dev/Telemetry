@@ -102,7 +102,9 @@ async function handle(req, env, ctx) {
         accessSchemaReady: ['email_accounts', 'email_sessions', 'access_login_codes'].every((x) =>
           names.has(x),
         ),
-        familySharingReady: !!(await env.DB.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='family_shares'").first()),
+        familySharingReady: !!(await env.DB.prepare(
+          "SELECT name FROM sqlite_master WHERE type='table' AND name='family_shares'",
+        ).first()),
       });
     } catch {
       return json({ databaseConnected: false }, 503);
