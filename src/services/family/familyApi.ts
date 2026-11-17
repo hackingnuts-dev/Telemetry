@@ -4,6 +4,7 @@ import * as WebBrowser from 'expo-web-browser';
 import * as Location from 'expo-location';
 import * as Battery from 'expo-battery';
 import { getSettings } from '../../core/settings';
+import { saveObservation } from '../../core/database';
 import type { LocationSnapshot } from '../../core/types';
 
 const BASE = (process.env.EXPO_PUBLIC_FAMILY_API_URL || '').replace(/\/$/, '');
@@ -203,7 +204,7 @@ export async function syncFamilyNow(): Promise<FamilySyncResult> {
   let ownFix: LocationSnapshot | null = null;
   let message = 'Family contact locations refreshed. Your location is not being shared.';
 
-  if (status.sharingEnabled && status.authorizedViewers > 0 && settings.locationEnabled) {
+  if (settings.locationEnabled) {
     const permission = await Location.getForegroundPermissionsAsync();
     if (permission.granted) {
       try {
@@ -216,20 +217,26 @@ export async function syncFamilyNow(): Promise<FamilySyncResult> {
           accuracy: fresh.coords.accuracy,
           recordedAt: Math.round(fresh.timestamp),
         };
-        uploaded = await publishFamilyFix(ownFix, { force: true });
-        message = uploaded
-          ? 'Your newest location was shared with approved contacts.'
-          : 'Family locations refreshed, but your latest location could not be uploaded.';
+        await saveObservation(ownFix);
       } catch {
         message = 'Family locations refreshed. A fresh GPS fix was unavailable.';
       }
     } else {
-      message = 'Family locations refreshed. Enable Location permission to share yours.';
+      message = 'Family locations refreshed. Enable Location permission to update your own position.';
     }
+  }
+
+  if (status.sharingEnabled && status.authorizedViewers > 0 && settings.locationEnabled && ownFix) {
+    uploaded = await publishFamilyFix(ownFix, { force: true });
+    message = uploaded
+      ? 'Your current location was shared with approved contacts. Family positions were refreshed.'
+      : 'Contacts refreshed, but your latest location could not be uploaded.';
   } else if (status.sharingEnabled && status.authorizedViewers === 0) {
-    message = 'Family locations refreshed. No contacts are currently authorized to view yours.';
+    message = 'Contacts refreshed. You have not authorized anyone to see your location.';
   } else if (status.sharingEnabled && !settings.locationEnabled) {
-    message = 'Family locations refreshed. Enable Location in Settings to share yours.';
+    message = 'Contacts refreshed. Enable Location in Settings to update your own position.';
+  } else if (!status.sharingEnabled) {
+    message = 'Family locations refreshed. Your location was not uploaded because sharing is paused.';
   }
   const contacts = await familyContacts();
   return { contacts, ownFix, uploaded, message };
