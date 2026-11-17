@@ -1,111 +1,174 @@
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import {
+  ActivityIndicator, Alert, Linking, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View,
+} from 'react-native';
 import { C } from './theme';
 import {
-  familyConfigured,
-  familyMe,
-  familySignOut,
-  hasFamilySession,
-  signInWithCloudflareAccess,
+  familyConfigured, familyMe, familySignOut, hasFamilySession, signInWithCloudflareAccess,
+  familyStatus, familyContacts, familyInvitations, familyViewers, inviteFamily,
+  decideInvitation, setFamilySharing, revokeFamilyViewer, getFamilyHistory,
 } from '../services/family/familyApi';
-import type { FamilyUser } from '../services/family/familyApi';
+import type { FamilyContact, FamilyInvitation, FamilyUser, FamilyViewer } from '../services/family/familyApi';
 
 type Props = { onBack: () => void };
-
 export default function Family({ onBack }: Props) {
   const [user, setUser] = useState<FamilyUser | null>(null);
+  const [active, setActive] = useState(false);
+  const [contacts, setContacts] = useState<FamilyContact[]>([]);
+  const [invitations, setInvitations] = useState<FamilyInvitation[]>([]);
+  const [viewers, setViewers] = useState<FamilyViewer[]>([]);
+  const [inviteEmail, setInviteEmail] = useState('');
   const [busy, setBusy] = useState(false);
 
+  const refresh = async () => {
+    const me = await familyMe();
+    const [status, list, pending, access] = await Promise.all([
+      familyStatus(), familyContacts(), familyInvitations(), familyViewers(),
+    ]);
+    setUser(me);
+    setActive(status.sharingEnabled);
+    setContacts(list);
+    setInvitations(pending);
+    setViewers(access);
+  };
   useEffect(() => {
-    let active = true;
+    let mounted = true;
     void (async () => {
       try {
-        if (await hasFamilySession()) {
-          const me = await familyMe();
-          if (active) setUser(me);
-        }
+        if (await hasFamilySession() && mounted) await refresh();
       } catch {
-        // Expired sessions require fresh Cloudflare Access login.
+        // Expired sessions require fresh Cloudflare Access sign-in.
       }
     })();
-    return () => {
-      active = false;
-    };
+    return () => { mounted = false; };
   }, []);
-
   const perform = async (fn: () => Promise<void>) => {
     if (busy) return;
     setBusy(true);
-    try {
-      await fn();
-    } catch (error) {
-      Alert.alert('Family Safety', error instanceof Error ? error.message : 'Please try again.');
-    } finally {
-      setBusy(false);
-    }
+    try { await fn(); }
+    catch (e) { Alert.alert('Family Safety', e instanceof Error ? e.message : 'Please try again.'); }
+    finally { setBusy(false); }
   };
-
+  const button = (label: string, fn: () => Promise<void>, secondary = false) => (
+    <Pressable accessibilityRole="button" disabled={busy}
+      style={[s.button, secondary && s.secondary, busy && s.disabled]}
+      onPress={() => void perform(fn)}>
+      <Text style={[s.buttonText, secondary && s.secondaryText]}>{label}</Text>
+    </Pressable>
+  );
   return (
-    <View style={s.root}>
-      <Pressable accessibilityRole="button" onPress={onBack}>
-        <Text style={s.link}>‹ Dashboard</Text>
-      </Pressable>
+    <ScrollView contentContainerStyle={s.root} keyboardShouldPersistTaps="handled">
+      <Pressable accessibilityRole="button" onPress={onBack}><Text style={s.link}>‹ Dashboard</Text></Pressable>
       <Text style={s.title}>Family safety</Text>
-      <Text style={s.sub}>
-        Private sign-in with Cloudflare Access. Location sharing requires separate consent.
-      </Text>
+      <Text style={s.sub}>Only people you approve can view your location. Sharing is always under your control.</Text>
       {!familyConfigured() ? (
         <View style={s.card}>
           <Text style={s.heading}>Family server not connected</Text>
-          <Text style={s.sub}>
-            Configure EXPO_PUBLIC_FAMILY_API_URL in the GitHub Actions repository variables and install a
-            fresh iPhone build.
-          </Text>
+          <Text style={s.sub}>Set the Family API and authentication Worker URLs in GitHub Actions and reinstall the new iPhone build.</Text>
         </View>
       ) : !user ? (
         <View style={s.card}>
-          <Text style={s.heading}>Sign in securely</Text>
-          <Text style={s.sub}>
-            Cloudflare will email a One-time PIN to an approved email address. No domain or paid email
-            provider is required.
-          </Text>
-          <Pressable
-            accessibilityRole="button"
-            style={s.button}
-            disabled={busy}
-            onPress={() => void perform(async () => setUser(await signInWithCloudflareAccess()))}
-          >
-            <Text style={s.buttonText}>Continue with Cloudflare Access</Text>
-          </Pressable>
+          <Text style={s.heading}>Sign in with Cloudflare Access</Text>
+          <Text style={s.sub}>Use your approved email and One-time PIN. This does not activate location sharing.</Text>
+          {button('Continue with Cloudflare Access', async () => {
+            await signInWithCloudflareAccess();
+            await refresh();
+          })}
         </View>
       ) : (
-        <View style={s.card}>
-          <Text style={s.heading}>Signed in</Text>
-          <Text style={s.label}>{user.name}</Text>
-          <Text style={s.sub}>{user.email}</Text>
-          <Text style={s.notice}>
-            Family location sharing is not enabled yet. Contacts, invitations and location history remain
-            disabled until server-side sharing permissions are implemented.
-          </Text>
-          <Pressable
-            accessibilityRole="button"
-            style={s.secondary}
-            disabled={busy}
-            onPress={() =>
-              void perform(async () => {
-                await familySignOut();
-                setUser(null);
-              })
-            }
-          >
-            <Text style={s.secondaryText}>Sign out</Text>
-          </Pressable>
-        </View>
+        <>
+          <View style={s.card}>
+            <Text style={s.heading}>My privacy</Text>
+            <Text style={s.label}>{user.email}</Text>
+            <View style={s.horizontal}>
+              <View style={s.flex}>
+                <Text style={s.label}>Share my location</Text>
+                <Text style={s.sub}>Only with contacts who accepted your sharing invitation. Pause at any time.</Text>
+              </View>
+              <Switch value={active} disabled={busy}
+                onValueChange={(enabled) => void perform(async () => {
+                  await setFamilySharing(enabled);
+                  await refresh();
+                })} />
+            </View>
+            <Text style={s.sub}>{viewers.length} contact(s) authorized to see your location when sharing is on.</Text>
+            {button('Sign out', async () => {
+              await familySignOut(); setUser(null); setActive(false);
+              setContacts([]); setInivitationsEmpty();
+            }, true)}
+          </View>
+          <View style={s.card}>
+            <Text style={s.heading}>Invite family or friends</Text>
+            <Text style={s.sub}>Enter their email. They'll see your invitation after signing in to Telemetry. No email invitation is sent yet.</Text>
+            <TextInput
+              value={inviteEmail} onChangeText={setInviteEmail} style={s.input}
+              placeholder="family@example.com" placeholderTextColor="#94A3B8"
+              keyboardType="email-address" autoCapitalize="none" autoCorrect={false}
+              accessibilityLabel="Family member email"
+            />
+            {button('Create invitation', async () => {
+              await inviteFamily(inviteEmail);
+              setInviteEmail('');
+              Alert.alert('Invitation created', 'Your contact can sign in to Telemetry and accept it.');
+              await refresh();
+            })}
+          </View>
+          <View style={s.card}>
+            <Text style={s.heading}>Incoming invitations</Text>
+            {invitations.length === 0 ? <Text style={s.sub}>No pending invitations</Text> : null}
+            {invitations.map((invite) => (
+              <View key={invite.id} style={s.item}>
+                <Text style={s.label}>{invite.from_name} ({invite.from_email})</Text>
+                <Text style={s.sub}>Accepting authorizes this person to view you only after you enable sharing above.</Text>
+                {button('Accept invitation', async () => { await decideInvitation(invite.id, 'accept'); await refresh(); })}
+                {button('Decline', async () => { await decideInvitation(invite.id, 'decline'); await refresh(); }, true)}
+              </View>
+            ))}
+          </View>
+          <View style={s.card}>
+            <Text style={s.heading}>Connected contacts</Text>
+            {contacts.length === 0 ? <Text style={s.sub}>No accepted contacts yet</Text> : null}
+            {contacts.map((contact) => (
+              <View key={contact.id} style={s.item}>
+                <Text style={s.label}>{contact.name} · {contact.email}</Text>
+                <Text style={s.sub}>{contact.sharing ? (contact.online ? 'Recently updated' : 'No recent update') : 'Sharing paused'}</Text>
+                {contact.sharing && contact.latitude != null && contact.longitude != null ? (
+                  <>
+                    <Text style={s.sub}>Battery: {contact.battery ?? '—'}% · Last update: {contact.updatedAt ? new Date(contact.updatedAt).toLocaleString() : 'Unknown'}</Text>
+                    {button('Show location', async () => {
+                      await Linking.openURL('https://maps.apple.com/?ll=' + contact.latitude + ',' + contact.longitude);
+                    })}
+                    {button('24-hour history', async () => {
+                      const count = await getFamilyHistory(contact.id);
+                      Alert.alert('Location history', count + ' shared points in the last 24 hours.');
+                    }, true)}
+                  </>
+                ) : null}
+              </View>
+            ))}
+          </View>
+          <View style={s.card}>
+            <Text style={s.heading}>Who can see me?</Text>
+            {viewers.length === 0 ? <Text style={s.sub}>No contacts have access yet.</Text> : null}
+            {viewers.map((viewer) => (
+              <View key={viewer.id} style={s.item}>
+                <Text style={s.label}>{viewer.name} · {viewer.email}</Text>
+                {button('Revoke access', async () => { await revokeFamilyViewer(viewer.id); await refresh(); }, true)}
+              </View>
+            ))}
+          </View>
+          {button('Refresh contacts', refresh, true)}
+        </>
       )}
       {busy ? <ActivityIndicator color={C.blue} /> : null}
-      <Text style={s.sub}>Signing in does not authorize others to see your location.</Text>
-    </View>
+      <Text style={s.sub}>Signed-in members control their own sharing. iOS background updates depend on location permissions and system scheduling.</Text>
+    </ScrollView>
   );
+
+  function setInivitationsEmpty() {
+    setInvitations([]);
+    setViewers([]);
+  }
 }
 const s = StyleSheet.create({
   root: { paddingHorizontal: 20, paddingTop: 18, paddingBottom: 35, gap: 13 },
@@ -114,24 +177,14 @@ const s = StyleSheet.create({
   heading: { color: C.text, fontSize: 18, fontWeight: '800' },
   label: { color: C.text, fontSize: 15, fontWeight: '700' },
   sub: { color: C.muted, fontSize: 12, lineHeight: 19 },
-  notice: {
-    color: C.text,
-    fontSize: 13,
-    lineHeight: 21,
-    backgroundColor: C.paleBlue,
-    padding: 12,
-    borderRadius: 10,
-  },
-  card: {
-    backgroundColor: C.surface,
-    borderColor: C.line,
-    borderWidth: 1,
-    borderRadius: 16,
-    padding: 18,
-    gap: 12,
-  },
+  card: { backgroundColor: C.surface, borderColor: C.line, borderWidth: 1, borderRadius: 16, padding: 18, gap: 12 },
+  item: { borderTopColor: C.line, borderTopWidth: 1, gap: 8, paddingTop: 12 },
+  input: { borderColor: C.line, borderWidth: 1, borderRadius: 10, padding: 12, color: C.text, fontSize: 16 },
   button: { backgroundColor: C.blue, padding: 14, borderRadius: 10, alignItems: 'center' },
   buttonText: { color: '#fff', fontWeight: '700', fontSize: 14 },
-  secondary: { backgroundColor: C.paleBlue, padding: 14, borderRadius: 10, alignItems: 'center' },
-  secondaryText: { color: C.blue, fontWeight: '700', fontSize: 14 },
+  secondary: { backgroundColor: C.paleBlue },
+  secondaryText: { color: C.blue },
+  disabled: { opacity: 0.6 },
+  horizontal: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  flex: { flex: 1 },
 });
