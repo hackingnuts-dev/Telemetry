@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  AppState,
   Linking,
   Pressable,
   ScrollView,
@@ -27,6 +28,8 @@ import {
   setFamilySharing,
   revokeFamilyViewer,
   getFamilyHistory,
+  shareMyLocationWithContact,
+  syncFamilyNow,
 } from '../services/family/familyApi';
 import type { FamilyContact, FamilyInvitation, FamilyUser, FamilyViewer } from '../services/family/familyApi';
 
@@ -67,6 +70,14 @@ export default function Family({ onBack }: Props) {
       mounted = false;
     };
   }, []);
+  useEffect(() => {
+    if (!user) return;
+    const timer = setInterval(() => {
+      if (AppState.currentState === 'active') void refresh().catch(() => {});
+    }, 30000);
+    return () => clearInterval(timer);
+  }, [user?.id]);
+
   const perform = async (fn: () => Promise<void>) => {
     if (busy) return;
     setBusy(true);
@@ -125,7 +136,7 @@ export default function Family({ onBack }: Props) {
               <View style={s.flex}>
                 <Text style={s.label}>Share my location</Text>
                 <Text style={s.sub}>
-                  Only with contacts who accepted your sharing invitation. Pause at any time.
+                  Only people you expressly authorize can see your location. Pause at any time.
                 </Text>
               </View>
               <Switch
@@ -219,17 +230,55 @@ export default function Family({ onBack }: Props) {
                       : 'No recent update'
                     : 'Sharing paused'}
                 </Text>
+                {!viewers.some((viewer) => viewer.id === contact.id) ? (
+                  <>
+                    <Text style={s.sub}>
+                      You can see this contact, but they cannot see you until you allow it.
+                    </Text>
+                    {button('Allow them to see my location', async () => {
+                      Alert.alert(
+                        'Allow reciprocal sharing?',
+                        'This contact can view your location only while your Share my location switch is on.',
+                        [
+                          { text: 'Cancel', style: 'cancel' },
+                          {
+                            text: 'Allow',
+                            onPress: () =>
+                              void perform(async () => {
+                                await shareMyLocationWithContact(contact.id);
+                                await refresh();
+                              }),
+                          },
+                        ],
+                      );
+                    }, true)}
+                  </>
+                ) : (
+                  <Text style={s.sub}>
+                    Two-way access approved. Both people still control their own sharing.
+                  </Text>
+                )}
                 {contact.sharing && contact.latitude != null && contact.longitude != null ? (
                   <>
                     <Text style={s.sub}>
                       Battery: {contact.battery ?? '—'}% · Last update:{' '}
                       {contact.updatedAt ? new Date(contact.updatedAt).toLocaleString() : 'Unknown'}
                     </Text>
-                    {button('Show location', async () => {
+                    <Text style={s.coordinate}>
+                      {contact.latitude.toFixed(6)}, {contact.longitude.toFixed(6)}
+                    </Text>
+                    <Text style={s.sub}>Last reported position, refreshed when Telemetry is open.</Text>
+                    {button('Open Apple Maps', async () => {
                       await Linking.openURL(
                         'https://maps.apple.com/?ll=' + contact.latitude + ',' + contact.longitude,
                       );
                     })}
+                    {button('Open Google Maps', async () => {
+                      await Linking.openURL(
+                        'https://www.google.com/maps/search/?api=1&query=' +
+                          encodeURIComponent(contact.latitude + ',' + contact.longitude),
+                      );
+                    }, true)}
                     {button(
                       '24-hour history',
                       async () => {
@@ -262,7 +311,12 @@ export default function Family({ onBack }: Props) {
               </View>
             ))}
           </View>
-          {button('Refresh contacts', refresh, true)}
+          {button('Refresh shared locations', async () => {
+            const result = await syncFamilyNow();
+            setContacts(result.contacts);
+            await refresh();
+            Alert.alert('Family sync', result.message);
+          }, true)}
         </>
       )}
       {busy ? <ActivityIndicator color={C.blue} /> : null}
@@ -285,6 +339,7 @@ const s = StyleSheet.create({
   heading: { color: C.text, fontSize: 18, fontWeight: '800' },
   label: { color: C.text, fontSize: 15, fontWeight: '700' },
   sub: { color: C.muted, fontSize: 12, lineHeight: 19 },
+  coordinate: { color: C.text, fontSize: 17, fontWeight: '700' },
   card: {
     backgroundColor: C.surface,
     borderColor: C.line,
