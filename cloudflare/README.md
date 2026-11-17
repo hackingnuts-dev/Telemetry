@@ -51,7 +51,7 @@ This is a **separate second phase** after Cloudflare Access login. Existing sign
    ```sql
    SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'family_%' ORDER BY name;
    ```
-3. Deploy updated [src/index.mjs](src/index.mjs) **and** [src/family.mjs](src/family.mjs) to `telemetry-family-api`. Important: the dashboard's one-file editor may not support a second module; use Wrangler with `wrangler.jsonc` or bundle the modules before deployment. **Do not paste only index.mjs**, because it imports `family.mjs`. The existing auth Worker stays unchanged.
+3. Easiest from Windows: open **[deploy-family-api.js](deploy-family-api.js)** → **Raw**, copy the entire file into **telemetry-family-api → Edit code**, and click **Deploy**. This file combines `src/index.mjs` and `src/family.mjs` into one dashboard-compatible Worker. **Do not paste only index.mjs**, because it imports `family.mjs`. The existing `telemetry-family-auth` Worker stays unchanged.
 4. In Zero Trust Access, add each participant's own verified email to `Telemetry Family Allow` only with their knowledge. They authenticate independently; GitHub ownership does not grant location access.
 5. Build and install the updated iPhone app only after the API deploys, and test with two voluntary accounts.
 
