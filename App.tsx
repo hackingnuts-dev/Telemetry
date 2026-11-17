@@ -207,7 +207,10 @@ export default function App() {
         const result = await flushOutbox();
         Alert.alert('Enterprise event sync', result.reason ?? `${result.sent} event(s) acknowledged.`);
       } else {
-        Alert.alert('Family sign-in needed', 'Open Family safety to sign in before refreshing shared locations.');
+        Alert.alert(
+          'Family sign-in needed',
+          'Open Family safety to sign in before refreshing shared locations.',
+        );
       }
       await refresh();
     } catch (e) {

@@ -89,9 +89,11 @@ export default function Settings({
         <View style={s.separator} />
         <ToggleRow
           title="Sync Data"
-          detail={enterpriseAvailable
-            ? "Optional corporate device-event sync. This is separate from Family Safety location sharing."
-            : "Corporate event server not configured. Family Safety still refreshes through Cloudflare."}
+          detail={
+            enterpriseAvailable
+              ? 'Optional corporate device-event sync. This is separate from Family Safety location sharing.'
+              : 'Corporate event server not configured. Family Safety still refreshes through Cloudflare.'
+          }
           value={settings.syncEnabled}
           disabled={busy || !enterpriseAvailable}
           onChange={(value) => void onToggle('syncEnabled', value)}
@@ -121,57 +123,60 @@ export default function Settings({
           Phone on file: {phone.masked} · {phone.status.replace('_', ' ')}
         </Text>
         <Text style={s.detail}>
-          iOS cannot reliably reveal your phone number. A phone number cannot locate another iPhone. Family tracking uses email sign-in, the other person's consent, and their Telemetry installation.
+          iOS cannot reliably reveal your phone number. A phone number cannot locate another iPhone. Family
+          tracking uses email sign-in, the other person's consent, and their Telemetry installation.
         </Text>
         {!enterpriseAvailable ? (
           <Text style={s.detail}>
-            Phone verification is not available in this free email-based Family Safety setup. No SMS or phone lookup is performed.
+            Phone verification is not available in this free email-based Family Safety setup. No SMS or phone
+            lookup is performed.
           </Text>
         ) : (
-        <>
-        <TextInput
-          style={s.input}
-          value={number}
-          onChangeText={setNumber}
-          keyboardType="phone-pad"
-          autoComplete="tel"
-          placeholder="+12025550123"
-          placeholderTextColor="#94A3B8"
-          accessibilityLabel="Phone number in international format"
-        />
-        <Pressable
-          style={[s.button, busy && s.disabled]}
-          disabled={busy}
-          onPress={() => void onPhoneRequest(number)}
-        >
-          <Text style={s.buttonText}>Send verification code</Text>
-        </Pressable>
-        {phone.status === 'pending_verification' ? (
-          <View style={{ marginTop: 14, gap: 10 }}>
+          <>
             <TextInput
               style={s.input}
-              value={code}
-              onChangeText={setCode}
-              keyboardType="number-pad"
-              placeholder="Verification code"
+              value={number}
+              onChangeText={setNumber}
+              keyboardType="phone-pad"
+              autoComplete="tel"
+              placeholder="+12025550123"
               placeholderTextColor="#94A3B8"
-              accessibilityLabel="Verification code"
+              accessibilityLabel="Phone number in international format"
             />
             <Pressable
               style={[s.button, busy && s.disabled]}
               disabled={busy}
-              onPress={() => void onPhoneVerify(code)}
+              onPress={() => void onPhoneRequest(number)}
             >
-              <Text style={s.buttonText}>Verify number</Text>
+              <Text style={s.buttonText}>Send verification code</Text>
             </Pressable>
-          </View>
-        ) : null}
-        </>
+            {phone.status === 'pending_verification' ? (
+              <View style={{ marginTop: 14, gap: 10 }}>
+                <TextInput
+                  style={s.input}
+                  value={code}
+                  onChangeText={setCode}
+                  keyboardType="number-pad"
+                  placeholder="Verification code"
+                  placeholderTextColor="#94A3B8"
+                  accessibilityLabel="Verification code"
+                />
+                <Pressable
+                  style={[s.button, busy && s.disabled]}
+                  disabled={busy}
+                  onPress={() => void onPhoneVerify(code)}
+                >
+                  <Text style={s.buttonText}>Verify number</Text>
+                </Pressable>
+              </View>
+            ) : null}
+          </>
         )}
       </View>
       {busy ? <ActivityIndicator color={C.blue} /> : null}
       <Text style={s.disclosure}>
-        No screen recordings are collected. Family sharing requires explicit authorization, not a phone number.
+        No screen recordings are collected. Family sharing requires explicit authorization, not a phone
+        number.
       </Text>
     </View>
   );

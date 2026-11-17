@@ -161,8 +161,7 @@ export async function publishFamilyFix(
 ): Promise<boolean> {
   if (!familyConfigured() || !(await hasFamilySession())) return false;
   const settings = await getSettings();
-  if (!settings.locationEnabled || (await SecureStore.getItemAsync(SHARING_KEY)) !== 'true')
-    return false;
+  if (!settings.locationEnabled || (await SecureStore.getItemAsync(SHARING_KEY)) !== 'true') return false;
   const now = Date.now();
   if (!options.force && now - lastUpload < 120000) return false;
   try {

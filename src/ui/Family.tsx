@@ -235,23 +235,27 @@ export default function Family({ onBack }: Props) {
                     <Text style={s.sub}>
                       You can see this contact, but they cannot see you until you allow it.
                     </Text>
-                    {button('Allow them to see my location', async () => {
-                      Alert.alert(
-                        'Allow reciprocal sharing?',
-                        'This contact can view your location only while your Share my location switch is on.',
-                        [
-                          { text: 'Cancel', style: 'cancel' },
-                          {
-                            text: 'Allow',
-                            onPress: () =>
-                              void perform(async () => {
-                                await shareMyLocationWithContact(contact.id);
-                                await refresh();
-                              }),
-                          },
-                        ],
-                      );
-                    }, true)}
+                    {button(
+                      'Allow them to see my location',
+                      async () => {
+                        Alert.alert(
+                          'Allow reciprocal sharing?',
+                          'This contact can view your location only while your Share my location switch is on.',
+                          [
+                            { text: 'Cancel', style: 'cancel' },
+                            {
+                              text: 'Allow',
+                              onPress: () =>
+                                void perform(async () => {
+                                  await shareMyLocationWithContact(contact.id);
+                                  await refresh();
+                                }),
+                            },
+                          ],
+                        );
+                      },
+                      true,
+                    )}
                   </>
                 ) : (
                   <Text style={s.sub}>
@@ -273,12 +277,16 @@ export default function Family({ onBack }: Props) {
                         'https://maps.apple.com/?ll=' + contact.latitude + ',' + contact.longitude,
                       );
                     })}
-                    {button('Open Google Maps', async () => {
-                      await Linking.openURL(
-                        'https://www.google.com/maps/search/?api=1&query=' +
-                          encodeURIComponent(contact.latitude + ',' + contact.longitude),
-                      );
-                    }, true)}
+                    {button(
+                      'Open Google Maps',
+                      async () => {
+                        await Linking.openURL(
+                          'https://www.google.com/maps/search/?api=1&query=' +
+                            encodeURIComponent(contact.latitude + ',' + contact.longitude),
+                        );
+                      },
+                      true,
+                    )}
                     {button(
                       '24-hour history',
                       async () => {
@@ -311,12 +319,16 @@ export default function Family({ onBack }: Props) {
               </View>
             ))}
           </View>
-          {button('Refresh shared locations', async () => {
-            const result = await syncFamilyNow();
-            setContacts(result.contacts);
-            await refresh();
-            Alert.alert('Family sync', result.message);
-          }, true)}
+          {button(
+            'Refresh shared locations',
+            async () => {
+              const result = await syncFamilyNow();
+              setContacts(result.contacts);
+              await refresh();
+              Alert.alert('Family sync', result.message);
+            },
+            true,
+          )}
         </>
       )}
       {busy ? <ActivityIndicator color={C.blue} /> : null}

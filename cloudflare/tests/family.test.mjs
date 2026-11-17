@@ -97,14 +97,8 @@ test('Invitation requires a recipient login, explicit acceptance and independent
   assert.equal((await req(f.env, b, '/v1/invites')).data.invitations.length, 1);
   assert.equal((await req(f.env, b, '/v1/invites/' + inviteId + '/accept', 'POST', {})).status, 200);
   // Reciprocal visibility requires the owner to grant access explicitly.
-  assert.equal(
-    (await req(f.env, c, '/v1/family/contacts/' + f.A + '/share-back', 'POST', {})).status,
-    403,
-  );
-  assert.equal(
-    (await req(f.env, a, '/v1/family/contacts/' + f.B + '/share-back', 'POST', {})).status,
-    200,
-  );
+  assert.equal((await req(f.env, c, '/v1/family/contacts/' + f.A + '/share-back', 'POST', {})).status, 403);
+  assert.equal((await req(f.env, a, '/v1/family/contacts/' + f.B + '/share-back', 'POST', {})).status, 200);
   // Global sharing remains off until A independently enables it.
   assert.equal((await req(f.env, b, '/v1/family/contacts')).data.contacts[0].sharing, false);
   assert.equal((await req(f.env, a, '/v1/family/sharing', 'POST', { enabled: true })).status, 200);

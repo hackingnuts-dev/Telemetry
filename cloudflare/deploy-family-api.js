@@ -151,6 +151,28 @@ async function family(req, env, account, path) {
     ).run();
     return ok({ sharingEnabled: b.enabled });
   }
+  // A contact's existing permission to share with me does not grant them access to me.
+  // Only my explicit, authenticated action can create the reciprocal grant.
+  const shareBack = /^\/v1\/family\/contacts\/([a-f0-9-]{36})\/share-back$/.exec(path);
+  if (shareBack && req.method === 'POST') {
+    const contactId = shareBack[1];
+    if (contactId === me) throw fail(400, 'Cannot share with yourself');
+    const established = await q(
+      env,
+      'SELECT 1 AS linked FROM family_shares WHERE subject_id=? AND viewer_id=?',
+      contactId,
+      me,
+    ).first();
+    if (!established) throw fail(403, 'The contact must first approve sharing with you');
+    await q(
+      env,
+      'INSERT OR IGNORE INTO family_shares(subject_id,viewer_id,consented_at) VALUES(?,?,?)',
+      me,
+      contactId,
+      now,
+    ).run();
+    return ok({ ok: true, sharingEnabled: await enabled(env, me) });
+  }
   if (path === '/v1/family/viewers' && req.method === 'GET') {
     const r = await q(
       env,

@@ -65,19 +65,26 @@ export default function Dashboard({
     : 'Not recorded';
   const openMap = async (provider: 'apple' | 'google', lat: number, lng: number) => {
     const coordinates = lat + ',' + lng;
-    const url = provider === 'apple'
-      ? 'https://maps.apple.com/?ll=' + coordinates
-      : 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(coordinates);
+    const url =
+      provider === 'apple'
+        ? 'https://maps.apple.com/?ll=' + coordinates
+        : 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(coordinates);
     await Linking.openURL(url);
   };
   const mapActions = (lat: number, lng: number) => (
     <View style={s.mapActions}>
-      <Pressable accessibilityRole="button" style={s.mapButton}
-        onPress={() => void openMap('apple', lat, lng)}>
+      <Pressable
+        accessibilityRole="button"
+        style={s.mapButton}
+        onPress={() => void openMap('apple', lat, lng)}
+      >
         <Text style={s.mapButtonText}>Apple Maps</Text>
       </Pressable>
-      <Pressable accessibilityRole="button" style={s.mapButton}
-        onPress={() => void openMap('google', lat, lng)}>
+      <Pressable
+        accessibilityRole="button"
+        style={s.mapButton}
+        onPress={() => void openMap('google', lat, lng)}
+      >
         <Text style={s.mapButtonText}>Google Maps</Text>
       </Pressable>
     </View>
@@ -129,7 +136,11 @@ export default function Dashboard({
           icon="↗"
           label="LOCAL EVENT LOG"
           value={`${pending} events`}
-          detail={enterpriseSyncAvailable ? 'Optional enterprise telemetry events' : 'Encrypted locally; no enterprise sync configured'}
+          detail={
+            enterpriseSyncAvailable
+              ? 'Optional enterprise telemetry events'
+              : 'Encrypted locally; no enterprise sync configured'
+          }
         />
       </View>
       <View style={s.card}>
@@ -159,16 +170,18 @@ export default function Dashboard({
         ) : (
           familyLocations.map((contact) => (
             <View key={contact.id} style={s.familyLocation}>
-              <Text style={s.familyName}>{contact.name} · {contact.email}</Text>
+              <Text style={s.familyName}>
+                {contact.name} · {contact.email}
+              </Text>
               {contact.sharing && contact.latitude != null && contact.longitude != null ? (
                 <>
                   <Text style={s.coordinate}>
                     {contact.latitude.toFixed(6)}, {contact.longitude.toFixed(6)}
                   </Text>
                   <Text style={s.muted}>
-                    Last reported: {contact.updatedAt
-                      ? new Date(contact.updatedAt).toLocaleString()
-                      : 'Not available'} · Battery {contact.battery ?? '—'}%
+                    Last reported:{' '}
+                    {contact.updatedAt ? new Date(contact.updatedAt).toLocaleString() : 'Not available'} ·
+                    Battery {contact.battery ?? '—'}%
                   </Text>
                   {mapActions(contact.latitude, contact.longitude)}
                 </>
@@ -181,7 +194,8 @@ export default function Dashboard({
           ))
         )}
         <Text style={s.footerNote}>
-          Coordinates refresh when the app is open. External maps display the last reported pin, not a continuously moving marker.
+          Coordinates refresh when the app is open. External maps display the last reported pin, not a
+          continuously moving marker.
         </Text>
       </View>
       <View style={s.card}>
@@ -208,7 +222,8 @@ export default function Dashboard({
           </Text>
         </View>
         <Text style={s.footerNote}>
-          Optional contact detail only. A phone number cannot reveal another person's location. Family access uses verified email and consent.
+          Optional contact detail only. A phone number cannot reveal another person's location. Family access
+          uses verified email and consent.
         </Text>
       </View>
       <Pressable style={s.familyButton} onPress={onFamily} accessibilityRole="button">
@@ -220,9 +235,16 @@ export default function Dashboard({
         disabled={syncing}
         accessibilityRole="button"
       >
-        {syncing ? <ActivityIndicator color="#fff" /> : <Text style={s.primaryText}>{familyConnected ? 'Refresh family locations' : 'Sync now'}</Text>}
+        {syncing ? (
+          <ActivityIndicator color="#fff" />
+        ) : (
+          <Text style={s.primaryText}>{familyConnected ? 'Refresh family locations' : 'Sync now'}</Text>
+        )}
       </Pressable>
-      <Text style={s.bottomText}>Family sharing is separate from enterprise event syncing. You can pause location collection in Settings.</Text>
+      <Text style={s.bottomText}>
+        Family sharing is separate from enterprise event syncing. You can pause location collection in
+        Settings.
+      </Text>
     </View>
   );
 }
