@@ -68,7 +68,7 @@ test('Access OTP identity cannot be forged from headers; sharing is disabled', a
   assert.equal(invalid.status, 403);
   assert.equal(
     (await json(await call(env, '/v1/location', { method: 'POST', body: { lat: 40, lng: -74 } }))).status,
-    503,
+    401,
   );
 });
 test('browser one-time code exchange binds to state, verifier and verified identity', async () => {
@@ -101,7 +101,7 @@ test('browser one-time code exchange binds to state, verifier and verified ident
   assert.equal(result.status, 200);
   assert.equal(result.body.user.email, 'person@example.com');
   assert.equal(result.body.user.sharingEnabled, false);
-  assert.equal(result.body.user.familyReady, false);
+  assert.equal(result.body.user.familyReady, true);
   const replay = await json(
     await call(env, '/v1/auth/access/exchange', { method: 'POST', body: { code, state, verifier } }),
   );

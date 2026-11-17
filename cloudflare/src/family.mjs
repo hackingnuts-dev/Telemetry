@@ -50,7 +50,7 @@ export async function family(req,env,account,path) {
   return ok({id,status:'pending',note:'Invitee must sign in and accept; no email has been sent'},201);
  }
  if(path==='/v1/invites'&&req.method==='GET') {
-  const r=await q(env,'SELECT i.id,i.created_at,a.display_name AS from_name,a.email AS from_email FROM family_invites i JOIN email_accounts a ON a.id=i.inviter_id WHERE i.invitee_email=? AND i.accepted_at IS NULL AND i.declined_at IS NULL AND i.expires_at>? ORDER BY created_at DESC LIMIT 50',account.email,now).all();
+  const r=await q(env,'SELECT i.id,i.created_at,a.display_name AS from_name,a.email AS from_email FROM family_invites i JOIN email_accounts a ON a.id=i.inviter_id WHERE i.invitee_email=? AND i.accepted_at IS NULL AND i.declined_at IS NULL AND i.expires_at>? ORDER BY i.created_at DESC LIMIT 50',account.email,now).all();
   return ok({invitations:r.results});
  }
  const decision=/^\/v1\/invites\/([a-f0-9-]{36})\/(accept|decline)$/.exec(path);

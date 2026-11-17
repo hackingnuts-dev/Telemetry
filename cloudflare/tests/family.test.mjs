@@ -16,7 +16,7 @@ function setup() {
  return {env,db,A,B,C,now};
 }
 async function sha(s){return Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(s))),v=>v.toString(16).padStart(2,'0')).join('')}
-async function session(f,user){const token='ab'.repeat(32-user.charCodeAt(0)%1); const t=user==='a'?'ab'.repeat(32):user==='b'?'bc'.repeat(32):'cd'.repeat(32);const id=f[user.toUpperCase()];f.db.prepare('INSERT INTO email_sessions(token_hash,account_id,created_at,expires_at) VALUES (?,?,?,?)').run(await sha(t),id,f.now,f.now+86400000);return t}
+async function session(f,user){const t=user==='a'?'ab'.repeat(32):user==='b'?'bc'.repeat(32):'cd'.repeat(32);const id=f[user.toUpperCase()];f.db.prepare('INSERT INTO email_sessions(token_hash,account_id,created_at,expires_at) VALUES (?,?,?,?)').run(await sha(t),id,f.now,f.now+86400000);return t}
 async function req(env,token,path,method='GET',body) {
  const headers={Authorization:'Bearer '+token,...(body?{'Content-Type':'application/json'}:{})};
  const request=new Request('https://example.invalid'+path,{method,headers,body:body?JSON.stringify(body):undefined});
