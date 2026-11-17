@@ -41,3 +41,34 @@ node --test cloudflare/tests/access-auth.test.mjs
 Checks include rejecting fake identity headers, refusing location uploads, single-use code exchange, verified-email mapping, session authorization and logout.
 
 Cloudflare reference: https://developers.cloudflare.com/workers/configuration/cloudflare-access/
+
+## Family sharing v4 — deploy only after schema and code are verified
+
+This is a **separate second phase** after Cloudflare Access login. Existing sign-in works; it does not automatically grant tracking permission.
+
+1. In Cloudflare **D1 → telemetry-family-db → Console**, execute [migrations/0004_family_sharing.sql](migrations/0004_family_sharing.sql), preserving line breaks. This creates `family_invites`, `family_shares`, `family_privacy`, `family_latest`, and `family_history`. No previous data is deleted.
+2. Confirm with:
+   ```sql
+   SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'family_%' ORDER BY name;
+   ```
+3. Deploy updated [src/index.mjs](src/index.mjs) **and** [src/family.mjs](src/family.mjs) to `telemetry-family-api`. Important: the dashboard's one-file editor may not support a second module; use Wrangler with `wrangler.jsonc` or bundle the modules before deployment. **Do not paste only index.mjs**, because it imports `family.mjs`. The existing auth Worker stays unchanged.
+4. In Zero Trust Access, add each participant's own verified email to `Telemetry Family Allow` only with their knowledge. They authenticate independently; GitHub ownership does not grant location access.
+5. Build and install the updated iPhone app only after the API deploys, and test with two voluntary accounts.
+
+### Consent model
+
+- An authenticated owner creates an invitation **to an email address**. This MVP stores an invitation in D1 but **does not send an email**. Tell the invitee directly to sign into Telemetry.
+- The invitee sees the invitation and may Accept or Decline. Accepting grants the inviter permission to view **only after the invitee separately turns on Share my location**.
+- The owner may pause tracking or revoke a specific viewer at any time. History access checks current sharing and the viewer-specific consent timestamp. Only observations since consent can be retrieved.
+- The server requires valid sessions on every endpoint. Devices upload their own coordinates only. No admin override or phone-number-only tracking is available.
+- The Family Safety app is designed to show contacts, last known location, battery, and count of location-history observations. It does not yet implement an interactive history map, push notifications, or safe-zone notifications.
+- iOS can delay location updates in the background. The app does not guarantee fixed reporting frequency.
+- Keep the API behind Cloudflare's normal TLS and rate protections. A later production hardening phase should implement bounded data retention and abuse monitoring.
+
+### Endpoint groups
+
+`GET /v1/family/status`, `POST /v1/family/sharing`, `GET /v1/family/contacts`, `GET /v1/family/viewers`, `DELETE /v1/family/viewers/:id`, `GET|POST /v1/invites`, `POST /v1/invites/:id/accept`, `POST /v1/invites/:id/decline`, `POST /v1/location`, `GET /v1/family/contacts/:id/history`.
+
+### Tests and release boundaries
+
+Run `node --test cloudflare/tests/*.test.mjs` (two-account consent tests). These have been exercised locally with SQLite. A full iPhone build and physical two-phone acceptance test have **not** yet been verified. Since you require zero spending, do not start GitHub macOS builds without checking their included free compute allowance.

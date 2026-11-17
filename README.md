@@ -52,3 +52,7 @@ Do not purchase Workers Paid, email delivery services, a domain, or any GitHub s
 The protected browser endpoint is `/auth/access/complete`, on `telemetry-family-auth.alankarsharma44.workers.dev`. The Worker uses Cloudflare's authenticated identity through `ctx.access`, then redirects a 90-second code to the app; the app uses proof-of-possession and a one-time exchange for a short-lived session. **Protect the dedicated auth Worker only**. The separate Family API Worker must use its own authenticated session checks. No location data is shared until explicit per-contact consent APIs are implemented.
 
 For iPhone auth, configure BOTH `EXPO_PUBLIC_FAMILY_API_URL` and `EXPO_PUBLIC_FAMILY_AUTH_URL` in GitHub Actions repository variables before building. See [Cloudflare setup](cloudflare/README.md).
+
+## Family invitations and consent sharing (staged)
+
+A new D1 schema and Cloudflare API module under [cloudflare/](cloudflare/README.md) support email invitations, explicit acceptance, separate opt-in location uploads, pause/revoke, and authorized contact history. **These changes are in GitHub only; they are not deployed to your Cloudflare Workers or installed on any iPhone.** The email invitation is in-app only and sends no email. Apply `0004_family_sharing.sql` first, then deploy both Worker JavaScript modules as a bundled deployment. Family tracking must never be enabled without each person's consent.
