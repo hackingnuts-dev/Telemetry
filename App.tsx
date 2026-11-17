@@ -31,7 +31,14 @@ import {
   requestPhoneVerification,
   verifyPhoneCode,
 } from './src/services/telephony/PhoneNumberService';
-import { flushOutbox } from './src/services/sync/syncService';
+import { flushOutbox, syncConfigured } from './src/services/sync/syncService';
+import {
+  familyConfigured,
+  familyContacts,
+  hasFamilySession,
+  syncFamilyNow,
+} from './src/services/family/familyApi';
+import type { FamilyContact } from './src/services/family/familyApi';
 import { getUsageCapability } from './src/services/usage/UsageTelemetry';
 import Dashboard from './src/ui/Dashboard';
 import Settings from './src/ui/Settings';
@@ -50,10 +57,23 @@ export default function App() {
   });
   const [battery, setBattery] = useState<number | null>(null);
   const [pending, setPending] = useState(0);
+  const [familyLocations, setFamilyLocations] = useState<FamilyContact[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const refreshFamily = useCallback(async () => {
+    if (!familyConfigured() || !(await hasFamilySession())) {
+      setFamilyLocations([]);
+      return;
+    }
+    try {
+      setFamilyLocations(await familyContacts());
+    } catch {
+      // Keep last known positions on temporary network errors.
+    }
+  }, []);
 
   const refresh = useCallback(async () => {
     const [fix, count, phoneDetails, level, mode] = await Promise.all([
@@ -69,7 +89,8 @@ export default function App() {
     setBattery(level >= 0 ? Math.round(level * 100) : null);
     setLocationMode(mode);
     setRunning(mode !== 'off');
-  }, []);
+    void refreshFamily();
+  }, [refreshFamily]);
 
   useEffect(() => {
     let mounted = true;
@@ -177,11 +198,20 @@ export default function App() {
   const onSync = async () => {
     setSyncing(true);
     try {
-      const result = await flushOutbox();
-      Alert.alert('Sync status', result.reason ?? `${result.sent} event(s) acknowledged by the server.`);
+      if (familyConfigured()) {
+        const result = await syncFamilyNow();
+        setFamilyLocations(result.contacts);
+        if (result.ownFix) setLocation(result.ownFix);
+        Alert.alert('Family location refresh', result.message);
+      } else if (syncConfigured()) {
+        const result = await flushOutbox();
+        Alert.alert('Enterprise event sync', result.reason ?? `${result.sent} event(s) acknowledged.`);
+      } else {
+        Alert.alert('Family sign-in needed', 'Open Family safety to sign in before refreshing shared locations.');
+      }
       await refresh();
     } catch (e) {
-      Alert.alert('Sync error', e instanceof Error ? e.message : 'Unable to sync');
+      Alert.alert('Sync status', e instanceof Error ? e.message : 'Unable to refresh family locations');
     } finally {
       setSyncing(false);
     }
@@ -237,6 +267,9 @@ export default function App() {
               location={location}
               phone={phone}
               pending={pending}
+              familyLocations={familyLocations}
+              familyConnected={familyConfigured()}
+              enterpriseSyncAvailable={syncConfigured()}
               syncing={syncing}
               onSync={() => void onSync()}
               onSettings={() => setPage('settings')}
